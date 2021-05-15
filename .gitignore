@@ -1,0 +1,32 @@
+ .svn
+*.pyc
+.settings
+.project
+.pydevproject
+.leaderf
+.DS_Store
+*.log
+*.out
+*.aux
+*.toc
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.xdv
+*.ipynb_checkpoints
+*.pyc
+build
+draft
+out
+nohup.out
+target
+node_modules
+npm-*
+dist
+tmp
+.env*
+__pycache__
+# Ignore user specific files in Xcode Project
+xcuserdata
+Cargo.lock
+private

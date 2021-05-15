@@ -1,0 +1,5 @@
+*.html linguist-documentation
+*.md linguist-documentation
+*.css linguist-documentation
+ui/* -linguist-detectable
+docs/* linguist-documentation
