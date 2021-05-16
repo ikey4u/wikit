@@ -25,8 +25,9 @@ Several reasons make me write this project
 # Development
 
 Firstly, you should familiar with MDX/MDD format which can be found at
-[here](https://bitbucket.org/xwang/mdict-analysis/src/master/), but you may be also interested in
-[docs/imgs/mdict.pdf](./docs/imgs/mdict.pdf).
+[here](https://bitbucket.org/xwang/mdict-analysis/src/master/). For MDX 2.0, you may be also interested in
+the following illustraion (you can view it in fullscreen [here](https://raw.githubusercontent.com/ikey4u/wikit/dev/docs/imgs/mdx-format.svg)):
+![mdx format](./docs/imgs/mdx-format.svg "mdx format")
 
 Secondly, download a MDX/MDD dictionary from anywhere and save it to somewhere, run the following
 command to do quick and dirty development
@@ -38,5 +39,5 @@ Finally, turn your thoughts into codes and make the contributions, cool develope
 # Roadmap
 
 - [x] MDX 2.0 parsing
-- [] MDX 2.0 writing
-- [] MDX 1.2 parsing and writing
+- [ ] MDX 2.0 writing
+- [ ] MDX 1.2 parsing and writing
