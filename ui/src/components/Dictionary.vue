@@ -6,42 +6,42 @@
       <div class="search-button" @click="click_search">Search</div>
     </div>
 
-    <div class="tab-group-title">英汉词典</div>
+    <div class="tab-group-title">En-Zh Dictionary</div>
     <div class="tab-buttons">
       <div class="tab-button" dictionary_name="en_en_oxford_advanced" @click="lookup_word_by_dictionary">
-        牛津高阶
+        Oxford Advanced
       </div>
       <div class="tab-button" dictionary_name="en_zh_cambridge" @click="lookup_word_by_dictionary">
-        剑桥
+        Cambridge
       </div>
       <div class="tab-button" dictionary_name="en_zh_ltd" @click="lookup_word_by_dictionary">
-        小词典
+        TLD
       </div>
       <div class="tab-button" dictionary_name="en_zh_collins" @click="lookup_word_by_dictionary">
-        柯林斯
+        Collins
       </div>
       <div class="tab-button" dictionary_name="en_en_ms_bing" @click="lookup_word_by_dictionary">
-        必应
+        Bing
       </div>
     </div>
 
-    <div class="tab-group-title">英英词典</div>
+    <div class="tab-group-title">English Dictionary</div>
     <div class="tab-buttons">
       <div class="tab-button" dictionary_name="en_en_cambridge_advanced" @click="lookup_word_by_dictionary">
-        剑桥高阶
+        Cambridge Advanced
       </div>
       <div class="tab-button" dictionary_name="en_en_collins_advanced" @click="lookup_word_by_dictionary">
-        柯林斯高阶
+        Collins Advanced
       </div>
       <div class="tab-button" dictionary_name="en_en_webser_unabridged" @click="lookup_word_by_dictionary">
-        韦氏 Unabridged
+        Webster Unabridged
       </div>
       <div class="tab-button" dictionary_name="en_en_webster_2020_online" @click="lookup_word_by_dictionary">
-        韦氏同义词
+        Webster Thesaurus
       </div>
     </div>
 
-    <div class="tab-group-title">汉英词典</div>
+    <div class="tab-group-title">Zh-En Dictionary</div>
     <div class="tab-buttons">
       <div class="tab-button" dictionary_name="zh_en_new_century" @click="lookup_word_by_dictionary">
         新世纪汉英大词典
@@ -54,7 +54,7 @@
       </div>
     </div>
 
-    <div class="tab-group-title">汉语词典</div>
+    <div class="tab-group-title">Chinese Dictionary</div>
     <div class="tab-buttons">
       <div class="tab-button" dictionary_name="zh_extream" @click="lookup_word_by_dictionary">
         汉语大词典
@@ -126,7 +126,7 @@ export default {
     this.$refs.user_input.focus();
     this.dictionary_name = 'en_en_oxford_advanced';
     document.getElementsByClassName("meaning")[0].onclick = this.click_word_in_meaning;
-    // 加入回退前进功能
+    // Enable forward and backward feature
     window.addEventListener('popstate', (event) => {
       if (event.state) {
         let state = event.state;
@@ -136,7 +136,8 @@ export default {
     });
     let page = document.getElementById("app");
     let vm = this;
-    // 如果是在输入框中按下回车, 则直接根据用户输入进行搜索, 其他地方按下回车则光标直接定位到输入框
+    // When cursor is already foucs on input box, then after pressing the enter key, do search
+    // directly.  Otherwise, make the cursor focuse into the input box.
     page.addEventListener("keyup", event => {
       let curele = document.activeElement.tagName;
       if (event.code === "Enter") {
@@ -147,8 +148,10 @@ export default {
         }
       }
     });
-    // 当光标聚焦位于输入框, 但是输入框已经滚动出当前页面, 用户也没有显示聚焦到释义区 (没有点击释义
-    /// 区), 此时按下回车不会回到输入框, 这里的设置能够实现该场景下按下回车继续回到输入框的功能
+    // When the cursor is focus on the input box but the input box is not visible to the user(and user
+    // does not press any key on the meaning page), if you press enter key in this situation, you
+    // will not able to input anything. The settings here enables the feature that when pressing enter
+    // key, go to input box and bring it into view.
     page.addEventListener("mouseover", event=> {
       page.focus({preventScroll: true});
     });
@@ -189,7 +192,7 @@ export default {
       if (stylename && stylename.length > 0) {
         document.getElementById('dictstyle').href = `/wikit/static/${stylename}`;
       }
-      // 动态加载 javascript 脚本
+      // Dynamically load javascript script
       let scriptname = this.dictscript[dictname];
       if (scriptname && scriptname.length > 0) {
         let script = document.getElementById('dictscript');
@@ -238,19 +241,20 @@ export default {
         this.$axios.get(`/dict/q?word=${word}&dictname=${dictionary_name}`)
           .then((res) => {
             let meaning = res.data;
-            // 中文词典将繁体转换为简体
+            // Convert Traditional Chinese to Simplified Chinese
             if (dictionary_name.startsWith('zh_')) {
               if (!meaning.startsWith('See <a href=')) {
                 meaning = this.simplized(meaning);
               }
             }
-            // 因为这个函数是异步操作的, 当用户点击了词典 A, 客户端开始发送请求, 如果此时用户里面点击词典 B,
-            // 界面切换到了 B 界面, 此时 A 的请求完成, 那么 B 词典的释义就是 A 词典的释义
+            // This is an asyn-function, client will send request after user clicks dictionary A.
+            // If the user clicks dictionary B immediately, the UI will change to page of dictionary
+            // B, let say that now the request of A has finished, then the meaning of dictionary B
+            // will be the meaning of dictionary A. The judgement here will avoid this mistake.
             if (this.dictionary_name == dictionary_name) {
               this.meaning = meaning;
             }
             this.cache[dictionary_name][word] = this.meaning;
-            // 记录状态
             window.history.pushState(
               // state
               {
@@ -281,7 +285,7 @@ export default {
     }, // query
 
     lookup_word_by_dictionary: function(event) {
-      // 点击词典按钮时要隐藏前一个词典的含义
+      // Hide the meaning of current dictionary when press next dictionary button
       document.getElementsByClassName('meaning')[0].style.display = 'none'
 
       let dictionary_name = event.target.getAttribute('dictionary_name');
@@ -310,9 +314,9 @@ export default {
       }
       let word = '';
 
-      // 当前节点
+      // Current node
       let node = event.target;
-      // 父节点
+      // Parent node
       let pnode = event.target.parentElement;
       let dictname = this.dictionary_name;
       let href = node.href;
@@ -339,7 +343,8 @@ export default {
       if (word && word.length > 0) {
           this.query(this.dictionary_name, word);
           this.user_input = word;
-          // decodeURIComponent 用于将 URI 编码的中文字符转换为正常的字符
+          // decodeURIComponent is used to convert URI encoded Chinese character to normal Chinese
+          // character
           document.getElementById('user-input').value = decodeURIComponent(word);
       }
     },
@@ -347,7 +352,7 @@ export default {
     click_search: function (event) {
       let user_input = document.getElementById("user-input").value
 
-      // 用户没有任何输入并按下回车时表示清空词典和含义
+      // Clear input box and meaning page when no input is given but the user clicks enter key
       if (user_input === '') {
         for (let e of document.getElementsByClassName('tab-buttons')) {
           e.style.display = 'none';
@@ -359,7 +364,7 @@ export default {
         return;
       }
 
-      // 如果用户输入没有发生变化, 则直接返回
+      // If the input does not change, return directly
       if (this.user_input === user_input) {
         return;
       }
@@ -376,7 +381,6 @@ export default {
 }
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
 
 .page {
