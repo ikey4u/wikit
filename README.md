@@ -5,7 +5,9 @@
 To be short, Wikit is a tool which can (fully, may be in future) render and create dictionary file
 in MDX/MDD format.
 
-This project is in very early stage, but you can try this [demo](http://106.53.152.194/wikit/).
+This project is in very early stage, but you can try this [demo](http://106.53.152.194/wikit/)
+online or download electron wrapped client from here
+[Releases](https://github.com/ikey4u/wikit/releases).
 
 # Why it?
 
