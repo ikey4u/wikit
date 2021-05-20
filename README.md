@@ -40,9 +40,9 @@ Finally, turn your thoughts into codes and make the contributions, cool develope
 
 # Roadmap
 
+- [x] MDX 1.2 parsing
 - [x] MDX 2.0 parsing
 - [ ] MDX 2.0 writing
-- [ ] MDX 1.2 parsing and writing
 
 # License
 
