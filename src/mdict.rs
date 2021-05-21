@@ -7,8 +7,8 @@ use std::io::Read;
 use std::fs::File;
 
 use sqlx::postgres::PgPoolOptions;
-use nom::number::streaming::{be_u8, be_u16, be_u32, be_u64, le_u32};
-use nom::{regex, do_parse, tuple, map_res, take, count, take_until, pair};
+use nom::number::streaming::{be_u32, le_u32};
+use nom::{regex, do_parse, tuple, map_res, take, count, take_until, pair, cond};
 use compress::zlib;
 use adler::Adler32;
 use ripemd128::{Ripemd128, Digest};
@@ -19,6 +19,13 @@ type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 #[derive(PartialEq)]
 pub enum ParseOption {
     OnlyHeader,
+}
+
+struct MDXInfo {
+    version: u32,
+    encoding: String,
+    integersz: u32,
+    encid: u32,
 }
 
 fn bytes_to_u64(buf: &[u8], be: bool) -> u64 {
@@ -48,11 +55,22 @@ fn mdx_decrypt(mut cipher: Vec<u8>, key: Vec<u8>) -> AnyResult<Vec<u8>> {
     Ok(cipher)
 }
 
-struct MDXInfo {
-    version: f64,
-    encoding: String,
-    integersz: u32,
-    encid: u32,
+fn mdx_decode(mdxinfo: &MDXInfo, encstr: &[u8]) -> AnyResult<String> {
+    let word_text = match mdxinfo.encoding.as_str() {
+        "GB18030" => {
+            let (word_text, _encoding_used, had_error) = GBK.decode(encstr);
+            if had_error {
+                return Err(elog!("GBK decoding failed"));
+            }
+            word_text.to_string()
+        }
+        _ => {
+            String::from_utf8(encstr.to_vec())
+            .context(elog!("invalid utf8 word text"))?
+            .replace("\x00", "")
+        }
+    };
+    Ok(word_text)
 }
 
 impl MDXInfo {
@@ -62,8 +80,9 @@ impl MDXInfo {
         } else {
             return Err(elog!("[!] No engine version"));
         };
+        let version = (version * 10.0) as u32;
 
-        let integersz = if version < 2.0 {
+        let integersz = if version < 20 {
             4
         } else {
             8
@@ -183,13 +202,13 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
         //     word_block_count: u64,
         //     word_count: u64,
         // )
-        layout: map_res!(take!(if mdxinfo.version < 2.0 { 16usize } else { 44usize }),
+        layout: map_res!(take!(if mdxinfo.version < 20 { 16usize } else { 44usize }),
             |x: &[u8]| -> AnyResult<(u64, u64, u64, u64)> {
                 if mdxinfo.encid == 1 {
                     return Err(elog!("words layout is encrypted by the creator"));
                 }
 
-                let layoutbuf = if mdxinfo.version < 2.0 {
+                let layoutbuf = if mdxinfo.version < 20 {
                     x
                 } else {
                     let (layoutbuf, adler32buf) = x.split_at(x.len() - 4);
@@ -203,36 +222,20 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                     layoutbuf
                 };
 
-                let layout: NomResult<_> = if mdxinfo.version < 2.0 {
-                    do_parse!(layoutbuf,
-                        word_block_count: be_u32 >>
-                        word_count: be_u32 >>
-                        word_info_size: be_u32 >>
-                        word_block_size: be_u32 >> (
-                            (
-                                word_info_size as u64,
-                                word_block_size as u64,
-                                word_block_count as u64,
-                                word_count as u64,
-                            )
+                let layout: NomResult<_> = do_parse!(layoutbuf,
+                    word_block_count: take!(mdxinfo.integersz) >>
+                    word_count: take!(mdxinfo.integersz) >>
+                    _word_info_unpack_size: cond!(mdxinfo.version >= 20, take!(mdxinfo.integersz)) >>
+                    word_info_size: take!(mdxinfo.integersz) >>
+                    word_block_size: take!(mdxinfo.integersz) >> (
+                        (
+                            bytes_to_u64(word_info_size, true),
+                            bytes_to_u64(word_block_size, true),
+                            bytes_to_u64(word_block_count, true),
+                            bytes_to_u64(word_count, true),
                         )
                     )
-                } else {
-                    do_parse!(layoutbuf,
-                        word_block_count: be_u64 >>
-                        word_count: be_u64 >>
-                        _word_info_unpack_size: be_u64 >>
-                        word_info_size: be_u64 >>
-                        word_block_size: be_u64 >> (
-                            (
-                                word_info_size,
-                                word_block_size,
-                                word_block_count,
-                                word_count,
-                            )
-                        )
-                    )
-                };
+                );
 
                 let (_, layout) = layout.context(elog!("failed to get words layout"))?;
                 Ok(layout)
@@ -242,7 +245,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
         // infos: Vec<block_word_count: u64, packsz: u64, unpacksz: u64>
         infos: map_res!(take!(layout.0 as usize),
             |x: &[u8]| -> AnyResult<Vec<(u64, u64, u64)>> {
-                let mut infosbuf = if mdxinfo.version < 2.0 {
+                let mut infosbuf = if mdxinfo.version < 20 {
                     x.to_vec()
                 } else {
                     let r: NomResult<_> = tuple!(x, le_u32, take!(4));
@@ -272,8 +275,8 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
 
                 let mut infos = vec![];
 
-                let get_word_size = |chrcnt| -> u32 {
-                    if mdxinfo.version < 2.0 {
+                let get_word_size = |chrcnt| -> u64 {
+                    if mdxinfo.version < 20 {
                         if mdxinfo.encoding == "UTF-16" {
                             chrcnt * 2
                         } else {
@@ -290,48 +293,26 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
 
                 // layout.2: number of word block
                 for i in 0..layout.2 {
-                    let info: NomResult<_> = if mdxinfo.version < 2.0 {
-                        do_parse!(&infosbuf[..],
-                            block_word_count: be_u32 >>
-                            first_word_size: be_u8 >>
-                            _first_word: take!(get_word_size(first_word_size as u32)) >>
-                            last_word_size: be_u8 >>
-                            _last_word: take!(get_word_size(last_word_size as u32)) >>
-                            packsz: be_u32 >>
-                            unpacksz: be_u32 >>
-                            (
-                                {
-                                    println!("[MDX 1.2] block_word_count[{}] contians {} words", i, block_word_count);
-                                    (
-                                        block_word_count as u64,
-                                        packsz as u64,
-                                        unpacksz as u64,
-                                    )
-                                }
-                            )
+                    let info: NomResult<_> = do_parse!(&infosbuf[..],
+                        block_word_count: take!(mdxinfo.integersz) >>
+                        first_word_size: take!(mdxinfo.integersz / 4) >>
+                        _first_word: take!(get_word_size(bytes_to_u64(first_word_size, true))) >>
+                        last_word_size: take!(mdxinfo.integersz / 4) >>
+                        _last_word: take!(get_word_size(bytes_to_u64(last_word_size, true))) >>
+                        packsz: take!(mdxinfo.integersz)>>
+                        unpacksz: take!(mdxinfo.integersz) >>
+                        (
+                            {
+                                (
+                                    bytes_to_u64(block_word_count, true),
+                                    bytes_to_u64(packsz, true),
+                                    bytes_to_u64(unpacksz, true),
+                                )
+                            }
                         )
-                    } else {
-                        do_parse!(&infosbuf[..],
-                            block_word_count: be_u64 >>
-                            first_word_size: be_u16 >>
-                            _first_word: take!(get_word_size(first_word_size as u32)) >>
-                            last_word_size: be_u16 >>
-                            _last_word: take!(get_word_size(last_word_size as u32)) >>
-                            packsz: be_u64 >>
-                            unpacksz: be_u64 >>
-                            (
-                                {
-                                    println!("[MDX 2.0] block_word_count[{}] contians {} words", i, block_word_count);
-                                    (
-                                        block_word_count,
-                                        packsz,
-                                        unpacksz,
-                                    )
-                                }
-                            )
-                        )
-                    };
+                    );
                     let (remain, info) = info.context(elog!("failed to parse mdx words info"))?;
+                    println!("[+] block_word_count[{}] contians {} words", i, info.0);
                     infos.push(info);
                     infosbuf = remain.to_vec();
                 }
@@ -397,20 +378,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
 
                         let (remain, (meaning_offset, word_text)) = r
                             .context(elog!("meaning_offset"))?;
-                        let word_text = match mdxinfo.encoding.as_str() {
-                            "GB18030" => {
-                                let (word_text, _encoding_used, had_error) = GBK.decode(word_text);
-                                if had_error {
-                                    return Err(elog!("GBK decoding failed"));
-                                }
-                                word_text.to_string()
-                            }
-                            _ => {
-                                String::from_utf8(word_text.to_vec())
-                                .context(elog!("invalid utf8 word text"))?
-                                .replace("\x00", "")
-                            }
-                        };
+                        let word_text = mdx_decode(&mdxinfo, word_text)?;
                         subwords.push((word_text, meaning_offset));
                         data = remain;
                     }
@@ -431,42 +399,29 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
 
     println!("[+] Parse meanings ...");
     let meanings: NomResult<Vec<u8>> = do_parse!(buf,
-        meaning_block_count: map_res!(take!(mdxinfo.integersz), |x: &[u8]| -> AnyResult<u64> {
-            Ok(bytes_to_u64(x, true))
-        }) >>
-        word_count: map_res!(take!(mdxinfo.integersz), |x: &[u8]| -> AnyResult<u64> {
-            Ok(bytes_to_u64(x, true))
-        }) >>
-        meaning_info_size: map_res!(take!(mdxinfo.integersz), |x: &[u8]| -> AnyResult<u64> {
-            Ok(bytes_to_u64(x, true))
-        }) >>
-        meaning_block_size: map_res!(take!(mdxinfo.integersz), |x: &[u8]| -> AnyResult<u64> {
-            Ok(bytes_to_u64(x, true))
-        }) >>
+        meaning_block_count: take!(mdxinfo.integersz) >>
+        word_count: take!(mdxinfo.integersz)  >>
+        meaning_info_size: take!(mdxinfo.integersz) >>
+        meaning_block_size: take!(mdxinfo.integersz) >>
         meanings: map_res!(
             tuple!(
                 // vector of (packsz, unpacksz) with length of meaning_block_count
                 count!(
-                    pair!(
-                        map_res!(take!(mdxinfo.integersz), |x: &[u8]| -> AnyResult<u64> {
-                            Ok(bytes_to_u64(x, true))
-                        }),
-                        map_res!(take!(mdxinfo.integersz), |x: &[u8]| -> AnyResult<u64> {
-                            Ok(bytes_to_u64(x, true))
-                        })
-                    ),
-                    meaning_block_count as usize
+                    pair!(take!(mdxinfo.integersz), take!(mdxinfo.integersz)),
+                    bytes_to_u64(meaning_block_count, true) as usize
                 ),
-                take!(meaning_block_size)
+                take!(bytes_to_u64(meaning_block_size, true))
             ),
             // Vec<(packsz, unpacksz)>, meaning_block
-            |x: (Vec<(u64, u64)>, &[u8])| -> AnyResult<Vec<u8>> {
+            |x: (Vec<(&[u8], &[u8])>, &[u8])| -> AnyResult<Vec<u8>> {
                 let (infos, mut meaningsbuf) = x;
                 let mut meanings: Vec<u8> = vec![];
                 for (packsz, unpacksz) in infos {
+                    let packsz = bytes_to_u64(packsz, true);
+                    let unpacksz = bytes_to_u64(unpacksz, true);
                     let packet = MdxPacket::new(meaningsbuf, packsz as u64)
                         .context(elog!("failed to create MdxPacket"))?;
-                    let mut unpackbuf = if mdxinfo.version < 2.0 {
+                    let mut unpackbuf = if mdxinfo.version < 20 {
                         minilzo_rs::LZO::init()
                             .context(elog!("failed to initialize lzo"))?
                             .decompress_safe(&packet.data[..], unpacksz as usize)
@@ -515,18 +470,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
             // middle element
             words[i + 1].1 as usize
         };
-        let meaning = match mdxinfo.encoding.as_str() {
-            "GB18030" => {
-                let word_text = meanings[start..end].to_vec();
-                let (word_text, _encoding_used, _had_errors) = GBK.decode(&word_text[..]);
-                word_text.to_string()
-            },
-            _ => {
-                String::from_utf8(meanings[start..end].to_vec())
-                .context(elog!("failed to get string from {:?}", &meanings[start..end]))?
-                .replace("\x00", "")
-            }
-        };
+        let meaning = mdx_decode(&mdxinfo, &meanings[start..end])?;
         word_meaning_list.push((word, meaning));
     }
 
