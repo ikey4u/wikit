@@ -12,7 +12,7 @@ use nom::{regex, do_parse, tuple, map_res, take, count, take_until, pair, cond};
 use compress::zlib;
 use adler::Adler32;
 use ripemd128::{Ripemd128, Digest};
-use encoding_rs::GBK;
+use encoding_rs::GB18030;
 
 type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 
@@ -55,17 +55,14 @@ fn mdx_decrypt(mut cipher: Vec<u8>, key: Vec<u8>) -> AnyResult<Vec<u8>> {
     Ok(cipher)
 }
 
-fn mdx_decode(mdxinfo: &MDXInfo, encstr: &[u8]) -> AnyResult<String> {
+fn mdx_decode(mdxinfo: &MDXInfo, buffer: &[u8]) -> AnyResult<String> {
     let word_text = match mdxinfo.encoding.as_str() {
         "GB18030" => {
-            let (word_text, _encoding_used, had_error) = GBK.decode(encstr);
-            if had_error {
-                return Err(elog!("GBK decoding failed"));
-            }
+            let (word_text, _encoding_used, _has_malformed_chars) = GB18030.decode(buffer);
             word_text.to_string()
         }
         _ => {
-            String::from_utf8(encstr.to_vec())
+            String::from_utf8(buffer.to_vec())
             .context(elog!("invalid utf8 word text"))?
             .replace("\x00", "")
         }
@@ -364,21 +361,21 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                         };
 
                         let r: NomResult<_> = do_parse!(data,
-                            meaning_offset: map_res!(
-                                take!(mdxinfo.integersz),
-                                |x: &[u8]| -> AnyResult<u64> {
-                                    Ok(bytes_to_u64(x, true))
-                                }
-                            ) >>
+                            meaning_offset: take!(mdxinfo.integersz) >>
                             word_text: take_until!(nullchar) >>
                             _end: take!(nullchar.len()) >> (
-                                (meaning_offset as u64, word_text)
+                                (bytes_to_u64(meaning_offset, true), word_text)
                             )
                         );
 
                         let (remain, (meaning_offset, word_text)) = r
                             .context(elog!("meaning_offset"))?;
-                        let word_text = mdx_decode(&mdxinfo, word_text)?;
+                        let word_text = mdx_decode(&mdxinfo, word_text)
+                            .context(elog!(
+                                "failed to decode {:x?} with encode {}",
+                                word_text,
+                                mdxinfo.encoding
+                            ))?;
                         subwords.push((word_text, meaning_offset));
                         data = remain;
                     }
@@ -405,7 +402,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
         meaning_block_size: take!(mdxinfo.integersz) >>
         meanings: map_res!(
             tuple!(
-                // vector of (packsz, unpacksz) with length of meaning_block_count
+                // meanings info of vector of (packsz, unpacksz) with length of meaning_block_count
                 count!(
                     pair!(take!(mdxinfo.integersz), take!(mdxinfo.integersz)),
                     bytes_to_u64(meaning_block_count, true) as usize
@@ -470,7 +467,12 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
             // middle element
             words[i + 1].1 as usize
         };
-        let meaning = mdx_decode(&mdxinfo, &meanings[start..end])?;
+        let meaning = mdx_decode(&mdxinfo, &meanings[start..end])
+            .context(elog!(
+                "failed to decode meaning {:x?} with encode {}",
+                &meanings[start..end],
+                mdxinfo.encoding
+            ))?;
         word_meaning_list.push((word, meaning));
     }
 
@@ -502,8 +504,7 @@ mod tests {
     #[test]
     fn test_parse_mdx() {
         let mdxpath = env!("TEST_MDX_FILE", "You must supply TEST_MDX_FILE environment");
-        if let Err(e) = parse_mdx(mdxpath, None) {
-            println!("failed to parse mdx: {:?}", e);
-        }
+        let dict = parse_mdx(mdxpath, None);
+        assert!(dict.is_ok(), "{}", "test mdx parsing failed");
     }
 }

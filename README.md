@@ -26,17 +26,26 @@ Several reasons make me write this project
 
 # Development
 
-Firstly, you should familiar with MDX/MDD format which can be found at
-[here](https://bitbucket.org/xwang/mdict-analysis/src/master/). For MDX 2.0, you may be also interested in
-the following illustraion (you can view it in fullscreen [here](https://raw.githubusercontent.com/ikey4u/wikit/dev/docs/imgs/mdx-format.svg)):
+Firstly, you should familiar with MDX format which is showed in the following illustraion (you can
+view it in fullscreen [here](https://raw.githubusercontent.com/ikey4u/wikit/master/docs/imgs/mdx-format.svg)):
 ![mdx format](./docs/imgs/mdx-format.svg "mdx format")
 
-Secondly, download a MDX/MDD dictionary from anywhere and save it to somewhere, run the following
+Secondly, download a MDX dictionary from anywhere and save it to somewhere, run the following
 command to do quick and dirty development
 
     TEST_MDX_FILE=/path/to/mdx cargo test test_parse_mdx -- --nocapture
 
 Finally, turn your thoughts into codes and make the contributions, cool developer!
+
+# Credits
+
+- [An Analysis of MDX/MDD File Format](https://bitbucket.org/xwang/mdict-analysis/src/master/) by [xwang](https://bitbucket.org/xwang)
+
+    The first attempt to analysis MDX/MDD file format.
+
+- [writemdict](https://github.com/zhansliu/writemdict) by [zhansliu](https://github.com/zhansliu)
+  
+    A python library to generate MDX file and give a detail description of MDX format.
 
 # Roadmap
 
