@@ -3,8 +3,9 @@ use crate::error::{Context, AnyResult, WikitError};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::io::Read;
+use std::io::{Read, BufRead, BufReader, BufWriter, Write};
 use std::fs::File;
+use std::path::{Path, PathBuf};
 
 use sqlx::postgres::PgPoolOptions;
 use nom::number::streaming::{be_u32, le_u32};
@@ -13,6 +14,7 @@ use compress::zlib;
 use adler::Adler32;
 use ripemd128::{Ripemd128, Digest};
 use encoding_rs::GB18030;
+use chrono::{DateTime, Local};
 
 type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 
@@ -479,6 +481,68 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
     Ok(word_meaning_list)
 }
 
+pub fn create_mdx<P: AsRef<Path>>(srcpath: P, dstpath: P) -> AnyResult<()> {
+    let dstpath = dstpath.as_ref();
+    let mut dstmdx = File::create(dstpath).context(elog!("Cannot create {}", dstpath.display()))?;
+
+    let now: DateTime<Local> = Local::now();
+    let mut meta = format!(
+        r#"
+			<Dictionary
+			GeneratedByEngineVersion="{version}"
+			RequiredEngineVersion="{version}"
+			Encrypted="{encrypted}"
+			Encoding="{encoding}"
+			Format="html"
+			CreationDate="{date}"
+			Compact="No"
+			Compat="No"
+			KeyCaseSensitive="No"
+			Description="{description}"
+			Title="{title}"
+			DataSourceFormat="106"
+			StyleSheet=""
+			RegisterBy="{creator}"
+			RegCode="You do not need this"/>
+        "#,
+        version = "2.0",
+        encrypted = 0,
+        encoding = "UTF-8",
+        date = now.format("%Y-%m-%d %H:%M:%S"),
+        description = "MDX created by Wikit",
+        title = "MDX 测试样例",
+        creator = "The awesome author",
+    );
+    meta.push_str("\r\n\x00");
+    let mut metabytes = vec![];
+    for ch in meta.encode_utf16() {
+        let bytes = ch.to_le_bytes();
+        metabytes.push(bytes[0]);
+        metabytes.push(bytes[1]);
+    }
+
+    let metasz = metabytes.len() as u32;
+
+    let mut adler = Adler32::new();
+    adler.write_slice(&metabytes[..]);
+    let adler32 = adler.checksum() as u32;
+
+    dstmdx.write(&metasz.to_be_bytes()[..])?;
+    for ch in metabytes {
+        dstmdx.write(&ch.to_be_bytes()[..])?;
+    }
+    dstmdx.write(&adler32.to_le_bytes()[..])?;
+
+    let path = srcpath.as_ref();
+    let file = File::open(path).context(elog!("Cannot open {:?}", path.display()))?;
+    for line in BufReader::new(file).lines() {
+        if let Ok(line) = line {
+            println!("LINE: {}", line);
+        }
+    }
+    Ok(())
+}
+
 pub async fn save_into_db(dict: Vec<(String, String)>, dburl: &str, table: &str) -> AnyResult<()> {
     let pool = PgPoolOptions::new().max_connections(5).connect(dburl).await?;
     sqlx::query(format!("CREATE TABLE IF NOT EXISTS {} (word TEXT UNIQUE, meaning TEXT)", table).as_str()).execute(&pool).await?;
@@ -503,8 +567,20 @@ mod tests {
     // this test is not a real unit-test but only for dirty and quick development
     #[test]
     fn test_parse_mdx() {
-        let mdxpath = env!("TEST_MDX_FILE", "You must supply TEST_MDX_FILE environment");
-        let dict = parse_mdx(mdxpath, None);
-        assert!(dict.is_ok(), "{}", "test mdx parsing failed");
+        let mdxpath = option_env!("TEST_MDX_FILE");
+        if let Some(mdxpath) = mdxpath {
+            let dict = parse_mdx(mdxpath, None);
+            assert!(dict.is_ok(), "{}", "test mdx parsing failed");
+        }
+    }
+
+    use crate::mdict::create_mdx;
+    use std::path::Path;
+    #[test]
+    fn test_create_mdx() {
+        let srcpath = Path::new("test/demo.txt");
+        let dstpath = Path::new("test/demo.mdx");
+        let r = create_mdx(srcpath, dstpath);
+        assert!(r.is_ok(), "{}:{:?}", "create mdx failed", r);
     }
 }
