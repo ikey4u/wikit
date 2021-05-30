@@ -3,9 +3,9 @@ use crate::error::{Context, AnyResult, WikitError};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::io::{Read, BufRead, BufReader, BufWriter, Write, Lines};
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::io::{Read, BufRead, BufReader, Write, Lines, Seek, SeekFrom};
+use std::fs::{File, OpenOptions};
+use std::path::{Path};
 
 use sqlx::postgres::PgPoolOptions;
 use nom::number::streaming::{be_u32, le_u32};
@@ -17,6 +17,8 @@ use encoding_rs::GB18030;
 use chrono::{DateTime, Local};
 
 type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
+// The max total size of MDX items (word or meaning) contained in one MDX block
+const MAX_MDX_ITEM_SIZE: usize = (2 << 2) as usize;
 
 #[derive(PartialEq)]
 pub enum ParseOption {
@@ -51,11 +53,23 @@ impl Iterator for MDXSource {
                             meaning.push_str(line.as_str().trim());
                         }
                     },
-                    Err(e) => return None
+                    Err(_) => return None
                 },
                 None => return None
             }
         }
+        let word = if word.len() > MAX_MDX_ITEM_SIZE {
+            println!("[!] Lenght of word exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
+            word[..MAX_MDX_ITEM_SIZE].to_string()
+        } else {
+            word
+        };
+        let meaning = if meaning.len() > MAX_MDX_ITEM_SIZE {
+            println!("[!] Lenght of meaning exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
+            meaning[..MAX_MDX_ITEM_SIZE].to_string()
+        } else {
+            meaning
+        };
         return Some((word, meaning));
     }
 }
@@ -278,7 +292,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                     x.to_vec()
                 } else {
                     let r: NomResult<_> = tuple!(x, le_u32, take!(4));
-                    let (data, (_packtype, adler32buf)) = r.context(elog!("take adler failed"))?;
+                    let (data, (packtype, adler32buf)) = r.context(elog!("take adler failed"))?;
 
                     let data = if mdxinfo.encid == 2 {
                         let ripemed128_message = [
@@ -295,11 +309,15 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                         data.to_vec()
                     };
 
-                    let mut infosbuf = vec![];
-                    zlib::Decoder::new(&data[..])
-                        .read_to_end(&mut infosbuf)
-                        .context(elog!("zlib decoding failed"))?;
-                    infosbuf
+                    if packtype != 0 {
+                        let mut infosbuf = vec![];
+                        zlib::Decoder::new(&data[..])
+                            .read_to_end(&mut infosbuf)
+                            .context(elog!("zlib decoding failed"))?;
+                        infosbuf
+                    } else {
+                        data
+                    }
                 };
 
                 let mut infos = vec![];
@@ -376,7 +394,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                         }
                         data
                     } else {
-                        x.to_vec()
+                        packet.data.to_vec()
                     };
 
                     let mut data = &data[..];
@@ -451,16 +469,25 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                     let packet = MdxPacket::new(meaningsbuf, packsz as u64)
                         .context(elog!("failed to create MdxPacket"))?;
                     let mut unpackbuf = if mdxinfo.version < 20 {
-                        minilzo_rs::LZO::init()
-                            .context(elog!("failed to initialize lzo"))?
-                            .decompress_safe(&packet.data[..], unpacksz as usize)
-                            .context(elog!("meanings lzo decompress failed"))?
+                        if packet.packtype != 0 {
+                            minilzo_rs::LZO::init()
+                                .context(elog!("failed to initialize lzo"))?
+                                .decompress_safe(&packet.data[..], unpacksz as usize)
+                                .context(elog!("meanings lzo decompress failed"))?
+                        } else {
+                            packet.data.to_vec()
+                        }
                     } else {
-                        let mut unpackbuf: Vec<u8> = Vec::new();
-                        zlib::Decoder::new(packet.data)
-                            .read_to_end(&mut unpackbuf)
-                            .context(elog!("zlib decoding failed"))?;
-
+                        let unpackbuf = if packet.packtype != 0 {
+                            let mut unpackbuf: Vec<u8> = Vec::new();
+                            zlib::Decoder::new(packet.data)
+                                .read_to_end(&mut unpackbuf)
+                                .context(elog!("zlib decoding failed"))?;
+                            unpackbuf
+                        } else {
+                            packet.data.to_vec()
+                        }
+                         ;
                         let mut adler = Adler32::new();
                         adler.write_slice(&unpackbuf[..]);
                         if adler.checksum() != packet.adler32 {
@@ -513,7 +540,13 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
 
 pub fn create_mdx<P: AsRef<Path>>(srcpath: P, dstpath: P) -> AnyResult<()> {
     let dstpath = dstpath.as_ref();
-    let mut dstmdx = File::create(dstpath).context(elog!("Cannot create {}", dstpath.display()))?;
+    let mut dstmdx = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(dstpath)
+        .context(elog!("Cannot open {:?}", dstpath.display()))?;
 
     println!("[+] Write mdx header ...");
     let now: DateTime<Local> = Local::now();
@@ -551,31 +584,273 @@ pub fn create_mdx<P: AsRef<Path>>(srcpath: P, dstpath: P) -> AnyResult<()> {
         metabytes.push(bytes[0]);
         metabytes.push(bytes[1]);
     }
-
     let metasz = metabytes.len() as u32;
-
     let mut adler = Adler32::new();
     adler.write_slice(&metabytes[..]);
     let adler32 = adler.checksum() as u32;
-
     dstmdx.write(&metasz.to_be_bytes()[..])?;
     for ch in metabytes {
         dstmdx.write(&ch.to_be_bytes()[..])?;
     }
     dstmdx.write(&adler32.to_le_bytes()[..])?;
 
-    println!("[+] Write mdx layout ...");
-    let mut word_block_count = 0u64;
-    let mut word_count = 0u64;
-    let mut word_info_unpack_size = 0u64;
-    let mut word_info_size = 0u64;
-    let mut word_block_size = 0u64;
-
+    // Read MDX source file and sort (word, meaning) by word
     let path = srcpath.as_ref();
     let file = File::open(path).context(elog!("Cannot open {:?}", path.display()))?;
-
     let reader = BufReader::new(file);
-    let mut mdxsrc = MDXSource { iter: reader.lines() };
+    let mdxsrc = MDXSource { iter: reader.lines() };
+    let mut mdxitems: Vec<_> = mdxsrc.collect();
+    mdxitems.sort_by_key(|k| k.clone().0);
+    // Build offset table which is used to build block
+    #[derive(Debug)]
+    struct OffsetTable<'a> {
+        offset: u64,
+        word_text: &'a str,
+        word: &'a [u8],
+        meaning: &'a [u8],
+        meaning_text: &'a str,
+    }
+    #[derive(Debug)]
+    struct OffsetTables<'a> {
+        used_for_word: bool,
+        counter: usize,
+        entries: Vec<OffsetTable<'a>>,
+    }
+    #[derive(Debug)]
+    struct WordInfoEntry {
+        block_word_count: u64,
+        first_word_size: u16,
+        first_word: Vec<u8>,
+        last_word_size: u16,
+        last_word: Vec<u8>,
+        packsz: u64,
+        unpacksz: u64,
+    }
+    #[derive(Debug)]
+    struct MeaningInfoEntry {
+        packsz: u64,
+        unpacksz: u64,
+    }
+    #[derive(Debug)]
+    enum InfoEntry {
+        WordInfoEntry(WordInfoEntry),
+        MeaningInfoEntry(MeaningInfoEntry),
+    }
+    #[derive(Debug)]
+    struct ValueEntry {
+        packtype: u32,
+        adler32: u32,
+        data: Vec<u8>,
+    }
+    impl<'a> Iterator for OffsetTables<'a> {
+        // Use dyn trait is not a good idea, see https://bennetthardwick.com/blog/dont-use-boxed-trait-objects-for-struct-internals/
+        type Item = (InfoEntry, ValueEntry);
+        fn next(&mut self) -> Option<Self::Item> {
+            let (begidx, mut endidx, mut block_size) = (self.counter as usize, 0usize, 0u32);
+            let mut reach_end = true;
+            for (i, offtbl) in self.entries.iter().skip(self.counter).enumerate() {
+                let itemsz = if self.used_for_word {
+                    offtbl.word.len() as u32
+                } else {
+                    offtbl.meaning.len() as u32
+                };
+
+                if block_size + itemsz > MAX_MDX_ITEM_SIZE as u32 {
+                    endidx = self.counter + i;
+                    reach_end = false;
+                    break;
+                }
+
+                if begidx >= endidx {
+                    block_size += itemsz;
+                }
+            }
+            if reach_end {
+                endidx = self.entries.len();
+            }
+
+            if begidx < endidx {
+                let mut value_entry = ValueEntry {
+                    // no compression
+                    packtype: 0u32,
+                    adler32: 0u32,
+                    data: vec![],
+                };
+                let mut rawdata = vec![];
+                for j in begidx..endidx {
+                    let data = if self.used_for_word {
+                        // meaning_offset and word_text
+                        let mut v = self.entries[j].offset.to_be_bytes().to_vec();
+                        v.append(&mut self.entries[j].word.to_vec());
+                        v.push(0x00);
+                        v
+                    } else {
+                        // meaning_segment
+                        self.entries[j].meaning.to_vec()
+                    };
+                    rawdata.extend(data);
+                }
+                let unpacksz = rawdata.len();
+                let packsz = rawdata.len() + 8;
+                value_entry.data.extend(rawdata);
+                value_entry.adler32 = {
+                    let mut adler = Adler32::new();
+                    adler.write_slice(&value_entry.data[..]);
+                    adler.checksum()
+                };
+
+                let entry: InfoEntry = if self.used_for_word {
+                    InfoEntry::WordInfoEntry(WordInfoEntry {
+                        block_word_count: (endidx - begidx) as u64,
+                        first_word_size: self.entries[begidx].word.len() as u16,
+                        first_word: {
+                            let mut v = self.entries[begidx].word.to_vec();
+                            v.push(0x00);
+                            v
+                        },
+                        last_word_size: self.entries[endidx - 1].word.len() as u16,
+                        last_word: {
+                            let mut v = self.entries[endidx - 1].word.to_vec();
+                            v.push(0x00);
+                            v
+                        },
+                        packsz: packsz as u64,
+                        unpacksz: unpacksz as u64,
+                    })
+                } else {
+                    InfoEntry::MeaningInfoEntry(MeaningInfoEntry {
+                        packsz: packsz as u64,
+                        unpacksz: unpacksz as u64,
+                    })
+                };
+                self.counter = endidx;
+                return Some((entry, value_entry));
+            } else {
+                self.counter = self.entries.len();
+                return None;
+            }
+        } // next
+    }
+    let mut word_count = 0u64;
+    let mut offtbls = OffsetTables { used_for_word: true, counter: 0usize, entries: vec![] };
+    let mut offset = 0u64;
+    for item in mdxitems.iter() {
+        offtbls.entries.push(OffsetTable {
+            offset: offset,
+            word_text: &item.0,
+            word: item.0.as_bytes(),
+            meaning: item.1.as_bytes(),
+            meaning_text: &item.1,
+        });
+        word_count += 1;
+        offset = offset + item.1.as_bytes().len() as u64;
+    }
+
+    enum MDXLayer {
+        WordsInfo,
+        MeaningsInfo,
+        WordsValue,
+        MeaningsValue
+    }
+    let write_mdx_layer = |file: &mut File, offtbls: &mut OffsetTables, layer: MDXLayer| -> AnyResult<(u64, u64)> {
+        offtbls.counter = 0;
+        match layer {
+            MDXLayer::WordsInfo | MDXLayer::WordsValue => {
+                offtbls.used_for_word = true;
+            },
+            MDXLayer::MeaningsInfo | MDXLayer::MeaningsValue => {
+                offtbls.used_for_word = false;
+            }
+        }
+        let (mut block_count, mut written_size) = (0u64, 0u64);
+        while let Some(item) = offtbls.next() {
+            block_count += 1;
+            match layer {
+                MDXLayer::WordsInfo | MDXLayer::MeaningsInfo => {
+                    match item.0 {
+                        InfoEntry::WordInfoEntry(info) => {
+                            written_size += 8 + 2 + (info.first_word_size + 1) as u64 + 2 + (info.last_word_size + 1) as u64 + 8 + 8;
+                            file.write(&info.block_word_count.to_be_bytes()[..])?;
+                            file.write(&info.first_word_size.to_be_bytes()[..])?;
+                            file.write(&info.first_word[..])?;
+                            file.write(&info.last_word_size.to_be_bytes()[..])?;
+                            file.write(&info.last_word[..])?;
+                            file.write(&info.packsz.to_be_bytes()[..])?;
+                            file.write(&info.unpacksz.to_be_bytes()[..])?;
+                        },
+                        InfoEntry::MeaningInfoEntry(info) => {
+                            written_size += 8 + 8;
+                            file.write(&info.packsz.to_be_bytes()[..])?;
+                            file.write(&info.unpacksz.to_be_bytes()[..])?;
+                        }
+                    }
+                },
+                MDXLayer::WordsValue | MDXLayer::MeaningsValue => {
+                    written_size += 4 + 4 + item.1.data.len() as u64;
+                    file.write(&item.1.packtype.to_be_bytes()[..])?;
+                    file.write(&item.1.adler32.to_be_bytes()[..])?;
+                    file.write(&item.1.data[..])?;
+                }
+            }
+        }
+        Ok((block_count, written_size))
+    };
+
+    println!("[+] Write word infos and values...");
+    let word_layout_offset = dstmdx.seek(SeekFrom::Current(0))?;
+    // layout + adler32 + packtype + adler32
+    let hole: Vec<u8> = vec![0; 40 + 4 + 4 + 4];
+    dstmdx.write(&hole[..])?;
+    let ret = write_mdx_layer(&mut dstmdx, &mut offtbls, MDXLayer::WordsInfo)?;
+    let (_word_block_count, word_info_size) = ret;
+    let ret = write_mdx_layer(&mut dstmdx, &mut offtbls, MDXLayer::WordsValue)?;
+    let (word_block_count, word_block_size) = ret;
+    // word infos contain additional packtype and adler32 field
+    let word_info_size = 4 + 4 + word_info_size;
+    let word_info_unpack_size = word_info_size;
+
+    println!("[+] Write layout for words...");
+    // calculate adler32 of infos and infos layout
+    dstmdx.seek(SeekFrom::Start(word_layout_offset + 40 + 4 + 4 + 4))?;
+    let mut reader = BufReader::new(&dstmdx);
+    let mut infosbuf = vec![0u8; (word_info_size - 4 - 4) as usize];
+    reader.read_exact(&mut infosbuf).context(elog!("cannot read infosbuf"))?;
+    let mut adler = Adler32::new();
+    adler.write_slice(&infosbuf[..]);
+    let infosbuf_adler32 = adler.checksum();
+    let mut infos_layout_buf = vec![];
+    infos_layout_buf.append(&mut word_block_count.to_be_bytes().to_vec());
+    infos_layout_buf.append(&mut word_count.to_be_bytes().to_vec());
+    infos_layout_buf.append(&mut word_info_unpack_size.to_be_bytes().to_vec());
+    infos_layout_buf.append(&mut word_info_size.to_be_bytes().to_vec());
+    infos_layout_buf.append(&mut word_block_size.to_be_bytes().to_vec());
+    let mut adler = Adler32::new();
+    adler.write_slice(&infos_layout_buf[..]);
+    let infos_layout_adler32 = adler.checksum();
+    // write words infos layout
+    dstmdx.seek(SeekFrom::Start(word_layout_offset))?;
+    dstmdx.write(&infos_layout_buf[..])?;
+    dstmdx.write(&infos_layout_adler32.to_be_bytes()[..])?;
+    let packtype: u32 = 0x00;
+    dstmdx.write(&packtype.to_be_bytes()[..])?;
+    dstmdx.write(&infosbuf_adler32.to_be_bytes()[..])?;
+
+    println!("[+] Write meaning info sand values...");
+    let meaning_layout_offset = word_layout_offset + 40 + 4 + word_info_size + word_block_size;
+    dstmdx.seek(SeekFrom::Start(meaning_layout_offset))?;
+    let hole: Vec<u8> = vec![0; 32];
+    dstmdx.write(&hole[..])?;
+    let ret = write_mdx_layer(&mut dstmdx, &mut offtbls, MDXLayer::MeaningsInfo)?;
+    let (_meaning_block_count, meaning_info_size) = ret;
+    let ret = write_mdx_layer(&mut dstmdx, &mut offtbls, MDXLayer::MeaningsValue)?;
+    let (meaning_block_count, meaning_block_size) = ret;
+
+    println!("[+] Write layout for meanings ...");
+    dstmdx.seek(SeekFrom::Start(meaning_layout_offset))?;
+    dstmdx.write(&meaning_block_count.to_be_bytes()[..])?;
+    dstmdx.write(&word_count.to_be_bytes()[..])?;
+    dstmdx.write(&meaning_info_size.to_be_bytes()[..])?;
+    dstmdx.write(&meaning_block_size.to_be_bytes()[..])?;
 
     Ok(())
 }
@@ -607,7 +882,7 @@ mod tests {
         let mdxpath = option_env!("TEST_MDX_FILE");
         if let Some(mdxpath) = mdxpath {
             let dict = parse_mdx(mdxpath, None);
-            assert!(dict.is_ok(), "{}", "test mdx parsing failed");
+            assert!(dict.is_ok(), "{}:{:?}", "test mdx parsing failed", dict);
         }
     }
 
