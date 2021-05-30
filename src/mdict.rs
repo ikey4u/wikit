@@ -3,7 +3,7 @@ use crate::error::{Context, AnyResult, WikitError};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::io::{Read, BufRead, BufReader, BufWriter, Write};
+use std::io::{Read, BufRead, BufReader, BufWriter, Write, Lines};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
@@ -28,6 +28,36 @@ struct MDXInfo {
     encoding: String,
     integersz: u32,
     encid: u32,
+}
+
+struct MDXSource {
+    iter: Lines<BufReader<File>>,
+}
+
+impl Iterator for MDXSource {
+    type Item = (String, String);
+    fn next(&mut self) -> Option<Self::Item> {
+        let (mut word, mut meaning) = (String::new(), String::new());
+        loop {
+            match self.iter.next() {
+                Some(line) => match line {
+                    Ok(line) => {
+                        if line.trim() == "</>" {
+                            break;
+                        }
+                        if word.len() == 0 {
+                            word = line.trim().to_string();
+                        } else {
+                            meaning.push_str(line.as_str().trim());
+                        }
+                    },
+                    Err(e) => return None
+                },
+                None => return None
+            }
+        }
+        return Some((word, meaning));
+    }
 }
 
 fn bytes_to_u64(buf: &[u8], be: bool) -> u64 {
@@ -485,6 +515,7 @@ pub fn create_mdx<P: AsRef<Path>>(srcpath: P, dstpath: P) -> AnyResult<()> {
     let dstpath = dstpath.as_ref();
     let mut dstmdx = File::create(dstpath).context(elog!("Cannot create {}", dstpath.display()))?;
 
+    println!("[+] Write mdx header ...");
     let now: DateTime<Local> = Local::now();
     let mut meta = format!(
         r#"
@@ -533,13 +564,19 @@ pub fn create_mdx<P: AsRef<Path>>(srcpath: P, dstpath: P) -> AnyResult<()> {
     }
     dstmdx.write(&adler32.to_le_bytes()[..])?;
 
+    println!("[+] Write mdx layout ...");
+    let mut word_block_count = 0u64;
+    let mut word_count = 0u64;
+    let mut word_info_unpack_size = 0u64;
+    let mut word_info_size = 0u64;
+    let mut word_block_size = 0u64;
+
     let path = srcpath.as_ref();
     let file = File::open(path).context(elog!("Cannot open {:?}", path.display()))?;
-    for line in BufReader::new(file).lines() {
-        if let Ok(line) = line {
-            println!("LINE: {}", line);
-        }
-    }
+
+    let reader = BufReader::new(file);
+    let mut mdxsrc = MDXSource { iter: reader.lines() };
+
     Ok(())
 }
 
