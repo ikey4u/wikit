@@ -33,7 +33,10 @@ view it in fullscreen [here](https://raw.githubusercontent.com/ikey4u/wikit/mast
 Secondly, download a MDX dictionary from anywhere and save it to somewhere, run the following
 command to do quick and dirty development
 
-    TEST_MDX_FILE=/path/to/mdx cargo test test_parse_mdx -- --nocapture
+    # create MDX file
+    make test-create
+    # parse MDX file
+    make test-parse
 
 Finally, turn your thoughts into codes and make the contributions, cool developer!
 
@@ -51,7 +54,12 @@ Finally, turn your thoughts into codes and make the contributions, cool develope
 
 - [x] MDX 1.2 parsing
 - [x] MDX 2.0 parsing
-- [ ] MDX 2.0 writing
+- [x] MDX 2.0 writing
+- [ ] Integrated testing
+- [ ] Create desktop client for Linux, Mac and Windows
+- [ ] MDD parsing
+- [ ] GUI tools to create, parse and modify MDX
+- [ ] Create mobile client for Android and iOS
 
 # License
 
