@@ -12,8 +12,8 @@ online or download electron wrapped client from here
 # Why it?
 
 MDX/MDD is a popular closed-source dictionary format which you can find many dictionaries made by a
-variety of folks on [pdawiki](https://www.pdawiki.com) or [freedict](https://freemdict.com/).
-All of this should give appreciations to the hero of `xwang` which firstly released full
+variety of folks on [pdawiki](https://www.pdawiki.com) or [freemdict](https://freemdict.com/).
+All of these should give appreciations to the hero of `xwang` who firstly released full
 reverse-engineering analysis of MDX/MDD format, which you can find
 [here](https://bitbucket.org/xwang/mdict-analysis/src/master/).
 
