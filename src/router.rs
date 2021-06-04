@@ -1,17 +1,18 @@
 use super::WIKIT_CONFIG;
 
-use std::{collections::HashMap};
-
 use sqlx::postgres::PgPoolOptions;
-use rocket::{Request, response::content, catch, get, catchers, routes};
-use rocket_contrib::templates::Template;
+use rocket::{Build, Request, response::content, catch, get, catchers, routes};
 use regex::Regex;
 
+
+#[catch(500)]
+fn internal_error() -> &'static str {
+    "It seems that you are not on earth"
+}
+
 #[catch(404)]
-fn not_found(req: &Request) -> Template {
-    let mut map = HashMap::new();
-    map.insert("path", req.uri().path());
-    Template::render("error/404", &map)
+fn not_found(req: &Request) -> String {
+    format!("I couldn't find '{}'. Try something else?", req.uri())
 }
 
 #[get("/q?<word>&<dictname>")]
@@ -52,8 +53,8 @@ async fn query(word: String, dictname: String) -> content::Html<String> {
     content::Html(meaning.to_string())
 }
 
-pub fn rocket() -> rocket::Rocket {
-    rocket::ignite()
+pub fn rocket() -> rocket::Rocket<Build> {
+    rocket::build()
         .mount("/dict/", routes![query])
-        .register(catchers![not_found])
+        .register("/", catchers![internal_error, not_found])
 }
