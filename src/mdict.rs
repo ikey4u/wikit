@@ -18,7 +18,7 @@ use chrono::{DateTime, Local};
 
 type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 // The max total size of MDX items (word or meaning) contained in one MDX block
-const MAX_MDX_ITEM_SIZE: usize = (2 << 2) as usize;
+const MAX_MDX_ITEM_SIZE: usize = (2 << 15) as usize;
 
 #[derive(PartialEq)]
 pub enum ParseOption {
@@ -538,7 +538,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
     Ok(word_meaning_list)
 }
 
-pub fn create_mdx<P: AsRef<Path>>(srcpath: P, dstpath: P) -> AnyResult<()> {
+pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, srcpath: P, dstpath: P) -> AnyResult<()> {
     let dstpath = dstpath.as_ref();
     let mut dstmdx = OpenOptions::new()
         .read(true)
@@ -573,9 +573,9 @@ pub fn create_mdx<P: AsRef<Path>>(srcpath: P, dstpath: P) -> AnyResult<()> {
         encrypted = 0,
         encoding = "UTF-8",
         date = now.format("%Y-%m-%d %H:%M:%S"),
-        description = "MDX created by Wikit",
-        title = "MDX 测试样例",
-        creator = "The awesome author",
+        description = description,
+        title = title,
+        creator = author,
     );
     meta.push_str("\r\n\x00");
     let mut metabytes = vec![];
@@ -892,7 +892,7 @@ mod tests {
     fn test_create_mdx() {
         let srcpath = Path::new("test/demo.txt");
         let dstpath = Path::new("test/demo.mdx");
-        let r = create_mdx(srcpath, dstpath);
+        let r = create_mdx("title", "author", "description", srcpath, dstpath);
         assert!(r.is_ok(), "{}:{:?}", "create mdx failed", r);
     }
 }
