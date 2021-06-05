@@ -24,6 +24,119 @@ Several reasons make me write this project
 - No platform-agnostic, user-friendly, fully-opensourced and free dictionary for now
 - I love rust programming
 
+# Installation and Usage
+
+There is no GUI but only CLI for Wikit for now, you can download the tool from [release](https://github.com/ikey4u/wikit/releases) page.
+
+Decompress the release packege and just fireup the tool `wikit`, you will see detail help information,
+for example
+
+    wikit 0.1.0
+    ikey4u <pwnkeeper@gmail.com>
+    A universal dictionary - Wikit
+
+    USAGE:
+        wikit [SUBCOMMAND]
+
+    FLAGS:
+        -h, --help       Prints help information
+        -V, --version    Prints version information
+
+    SUBCOMMANDS:
+        help      Prints this message or the help of the given subcommand(s)
+        mdx       Process MDX file
+        server    Run wikit as an API server
+
+There are serveral subcommands: `mdx` and `server`. However `server` is not stable for now,
+please use it carefully. For `mdx` subcommand, you can print its help information using following command
+
+    wikit mdx
+
+An example output is showed below
+
+    Process MDX file
+
+    USAGE:
+        wikit mdx [FLAGS] [OPTIONS] <input>
+
+    FLAGS:
+        -c, --create     Create mdx file
+        -h, --help       Prints help information
+            --info       Dump basic information of mdx file
+            --meta       You could specify a meta file when create mdx file. Wikit will use default meta info if this option
+                         is not provided. The template is given below(include the parentheses):
+                         (
+                             "title": "A generic MDX dictionary",
+                             "author": "An anonymous hero",
+                             "description": "Just for fun",
+                         )
+        -p, --parse      Parse mdx file
+        -V, --version    Prints version information
+
+    OPTIONS:
+        -o, --output <output>    Same with <input>
+            --table <table>      The table name in the database, you must provide this parameter if input/output is a
+                                 database url
+
+    ARGS:
+        <input>    The input file format depends on the value. If the value has a suffix .txt, then the input is a txt
+                   file; If the value has a suffix .mdx, then the input is a mdx file; If the value is a database url
+                   such as postgresql://user@localhost:5432/dictdb, then the input is a database
+
+Some usage examples
+
+    # Create a mdx file from text source
+    wikit mdx --create --output /path/to/dict.mdx /path/to/dict.txt
+
+    # Parse a mdx into text source
+    wikit mdx --parse --output /path/to/dict.txt /path/to/dict.mdx
+
+    # Dump information from mdx file
+    wikit mdx --info /path/to/dict.mdx
+
+# Building
+
+- Arch Linux Environment
+
+    - Mac Toolchain
+
+        Install requirements from [osxcross](https://github.com/tpoechtrager/osxcross) or see this
+        [article](https://wapl.es/rust/2019/02/17/rust-cross-compile-linux-to-macos.html)
+
+            git clone https://github.com/tpoechtrager/osxcross
+            cd osxcross
+            wget -nc https://s3.dockerproject.org/darwin/v2/MacOSX10.10.sdk.tar.xz
+            mv MacOSX10.10.sdk.tar.xz tarballs/
+            UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
+
+        Remember to add `/path/to/osxcross/target/bin` to your `PATH`.
+
+        Then add rust apple target
+
+            rustup target add x86_64-apple-darwin
+
+        Now you can build for Mac
+
+            CC=o64-clang CXX=o64-clang++ cargo build --target x86_64-apple-darwin
+
+    - Windows Toolchain
+
+        Install build tools
+
+            sudo pacman -S  mingw-w64-gcc
+
+        Install rust target and toolchain
+
+            rustup target add x86_64-pc-windows-gnu
+            rustup toolchain install stable-x86_64-pc-windows-gnu
+
+        Now you can build for Windows
+
+            cargo build --target x86_64-pc-windows-gnu
+
+        You may encounter some issues from library minilzo-rs, please refer this
+        [pull request](https://github.com/gmg137/minilzo-rs/pull/2) to fix.
+
 # Development
 
 Firstly, you should familiar with MDX format which is showed in the following illustraion (you can
