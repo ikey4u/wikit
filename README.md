@@ -66,9 +66,9 @@ An example output is showed below
             --meta       You could specify a meta file when create mdx file. Wikit will use default meta info if this option
                          is not provided. The template is given below(include the parentheses):
                          (
-                             "title": "A generic MDX dictionary",
-                             "author": "An anonymous hero",
-                             "description": "Just for fun",
+                             title: "A generic MDX dictionary",
+                             author: "An anonymous hero",
+                             description: "Just for fun",
                          )
         -p, --parse      Parse mdx file
         -V, --version    Prints version information
