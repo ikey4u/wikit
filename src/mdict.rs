@@ -18,7 +18,7 @@ use chrono::{DateTime, Local};
 
 type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 // The max total size of MDX items (word or meaning) contained in one MDX block
-const MAX_MDX_ITEM_SIZE: usize = (2 << 15) as usize;
+const MAX_MDX_ITEM_SIZE: usize = (2 << 20) as usize;
 
 #[derive(PartialEq)]
 pub enum ParseOption {
