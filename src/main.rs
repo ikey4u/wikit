@@ -37,7 +37,7 @@ impl MDXMeta {
     fn to_string(&self) -> String {
         let indent = "    ";
         return format!(
-            "(\n{}\"title\": \"{}\",\n{}\"author\": \"{}\",\n{}\"description\": \"{}\",\n)",
+            "(\n{}title: \"{}\",\n{}author: \"{}\",\n{}description: \"{}\",\n)",
             indent, &self.title,
             indent, &self.author,
             indent, &self.description
@@ -73,7 +73,7 @@ async fn main() -> AnyResult<()> {
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
-        .version("0.1.1")
+        .version("0.1.2")
         .author("ikey4u <pwnkeeper@gmail.com>")
         .about("A universal dictionary - Wikit")
         .subcommand(
@@ -107,7 +107,7 @@ async fn main() -> AnyResult<()> {
                     ).as_str()
                 )
                 .long("--meta")
-                .takes_value(false)
+                .takes_value(true)
             )
             .arg(Arg::with_name("output")
                 .help("Same with <input>")
