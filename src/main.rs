@@ -73,7 +73,7 @@ async fn main() -> AnyResult<()> {
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
-        .version("0.1.2")
+        .version("0.1.3")
         .author("ikey4u <pwnkeeper@gmail.com>")
         .about("A universal dictionary - Wikit")
         .subcommand(

@@ -94,6 +94,15 @@ Some usage examples
     # Dump information from mdx file
     wikit mdx --info /path/to/dict.mdx
 
+# Compatibility
+
+The first-class citizens supported by Wikit are opensourced dictionary tools such as
+[goldendict](https://github.com/goldendict/goldendict).  As a result, MDX created by Wikit will
+mainly be tested for them. Currently, MDX is tested with goldendict version 1.5.0-RC2+git, it works
+really well. If you have any other problems with the created MDX, please file an issue. MDX created
+by wikit is also tested with [MDict](https://www.mdict.cn) version 2.0.12, it works but the
+dictionary index seems does not work well.
+
 # Building
 
 - Arch Linux Environment

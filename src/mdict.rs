@@ -58,18 +58,20 @@ impl Iterator for MDXSource {
                 None => return None
             }
         }
-        let word = if word.len() > MAX_MDX_ITEM_SIZE {
+        let mut word = if word.len() > MAX_MDX_ITEM_SIZE {
             println!("[!] Lenght of word exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
             word[..MAX_MDX_ITEM_SIZE].to_string()
         } else {
             word
         };
-        let meaning = if meaning.len() > MAX_MDX_ITEM_SIZE {
+        word.push(0 as char);
+        let mut meaning = if meaning.len() > MAX_MDX_ITEM_SIZE {
             println!("[!] Lenght of meaning exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
             meaning[..MAX_MDX_ITEM_SIZE].to_string()
         } else {
             meaning
         };
+        meaning.push(0 as char);
         return Some((word, meaning));
     }
 }
@@ -549,41 +551,39 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
         .context(elog!("Cannot open {:?}", dstpath.display()))?;
 
     println!("[+] Write mdx header ...");
+    let mut meta = HashMap::new();
+    meta.insert("GeneratedByEngineVersion", "2.0");
+    meta.insert("RequiredEngineVersion", "2.0");
+    meta.insert("Encrypted", "0");
+    meta.insert("Encoding", "UTF-8");
+    meta.insert("Format", "Html");
     let now: DateTime<Local> = Local::now();
-    let mut meta = format!(
-        r#"
-			<Dictionary
-			GeneratedByEngineVersion="{version}"
-			RequiredEngineVersion="{version}"
-			Encrypted="{encrypted}"
-			Encoding="{encoding}"
-			Format="html"
-			CreationDate="{date}"
-			Compact="No"
-			Compat="No"
-			KeyCaseSensitive="No"
-			Description="{description}"
-			Title="{title}"
-			DataSourceFormat="106"
-			StyleSheet=""
-			RegisterBy="{creator}"
-			RegCode="You do not need this"/>
-        "#,
-        version = "2.0",
-        encrypted = 0,
-        encoding = "UTF-8",
-        date = now.format("%Y-%m-%d %H:%M:%S"),
-        description = description,
-        title = title,
-        creator = author,
-    );
-    meta.push_str("\r\n\x00");
+    let create_date = now.format("%Y-%m-%d %H:%M:%S").to_string();
+    meta.insert("CreationDate", &create_date);
+    meta.insert("Compact", "No");
+    meta.insert("Compat", "No");
+    meta.insert("KeyCaseSensitive", "No");
+    meta.insert("Description", description);
+    meta.insert("Title", title);
+    meta.insert("DataSourceFormat", "106");
+    meta.insert("StyleSheet", "");
+    meta.insert("RegisterBy", author);
+    // For the offical Mdict dictionary, field `RegCode` should remain empty
+    meta.insert("RegCode", "");
+
+    // Convert meta map to string and encoded as UTF16-LE
+    let mut metastr = format!("<Dictionary ");
+    for (k, v) in meta.iter() {
+        metastr.push_str(format!("{}=\"{}\" ", k, v).as_str());
+    }
+    metastr.push_str("/>\r\n\x00");
     let mut metabytes = vec![];
-    for ch in meta.encode_utf16() {
+    for ch in metastr.encode_utf16() {
         let bytes = ch.to_le_bytes();
         metabytes.push(bytes[0]);
         metabytes.push(bytes[1]);
     }
+
     let metasz = metabytes.len() as u32;
     let mut adler = Adler32::new();
     adler.write_slice(&metabytes[..]);
@@ -682,11 +682,11 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
                         // meaning_offset and word_text
                         let mut v = self.entries[j].offset.to_be_bytes().to_vec();
                         v.append(&mut self.entries[j].word.to_vec());
-                        v.push(0x00);
                         v
                     } else {
                         // meaning_segment
-                        self.entries[j].meaning.to_vec()
+                        let v = self.entries[j].meaning.to_vec();
+                        v
                     };
                     rawdata.extend(data);
                 }
@@ -807,7 +807,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
     let (word_block_count, word_block_size) = ret;
     // word infos contain additional packtype and adler32 field
     let word_info_size = 4 + 4 + word_info_size;
-    let word_info_unpack_size = word_info_size;
+    let word_info_unpack_size = word_info_size - 8;
 
     println!("[+] Write layout for words...");
     // calculate adler32 of infos and infos layout
@@ -835,7 +835,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
     dstmdx.write(&packtype.to_be_bytes()[..])?;
     dstmdx.write(&infosbuf_adler32.to_be_bytes()[..])?;
 
-    println!("[+] Write meaning info sand values...");
+    println!("[+] Write meaning info and values...");
     let meaning_layout_offset = word_layout_offset + 40 + 4 + word_info_size + word_block_size;
     dstmdx.seek(SeekFrom::Start(meaning_layout_offset))?;
     let hole: Vec<u8> = vec![0; 32];
