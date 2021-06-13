@@ -1,0 +1,15 @@
+[package]
+name = "Wikit"
+version = "0.1.0"
+authors = ["ikey4u <pwnkeeper@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+cargo-emit = "0.1"
+nativeshell_build = "0.1.3"
+
+[dependencies]
+nativeshell = "0.1.3"
+env_logger = "0.8.3"
