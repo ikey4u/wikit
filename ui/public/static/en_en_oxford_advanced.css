@@ -508,9 +508,15 @@ li.sense:before {
     counter-increment: item;
     font-weight: 600;
     margin-left: -1.3rem;
-    position: absolute;
+    /*
+
+      当父容器 overflow 但 positino 为 absolute 时, 计数器在 html 中会漂移,
+      因此这里修改为 relative
+
+    */
+    position: relative;
     text-align: right;
-font-size: 14px;
+  font-size: 14px;
 }
 
 li.sense {
