@@ -1,8 +1,0 @@
-/target
-.dart_tool
-.cache
-.DS_Store
-.packages
-build
-.flutter-plugins
-.flutter-plugins-dependencies
