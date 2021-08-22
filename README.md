@@ -105,46 +105,33 @@ dictionary index seems does not work well.
 
 # Building
 
-- Arch Linux Environment
+- Build only for your development machine
 
-    - Mac Toolchain
+        cargo build
 
-        Install requirements from [osxcross](https://github.com/tpoechtrager/osxcross) or see this
-        [article](https://wapl.es/rust/2019/02/17/rust-cross-compile-linux-to-macos.html)
+- Build cross-platform (mac, win, linux)
 
-            git clone https://github.com/tpoechtrager/osxcross
-            cd osxcross
-            wget -nc https://s3.dockerproject.org/darwin/v2/MacOSX10.10.sdk.tar.xz
-            mv MacOSX10.10.sdk.tar.xz tarballs/
-            UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
+    - Install [docker](https://www.docker.com/)
+    - Create development image
 
-        Remember to add `/path/to/osxcross/target/bin` to your `PATH`.
+            docker build -t wikitdev:v0.0.1 --progress plain --no-cache -f Dockerfile  .
 
-        Then add rust apple target
+        This command takes about 20 minutes to finish if you have a not-so-bad network.
 
-            rustup target add x86_64-apple-darwin
+    - Create development container
 
-        Now you can build for Mac
+            docker run --name wikit -dit -v $(git rev-parse --show-toplevel):/wikitdev/wikit wikitdev:v0.0.1 bash
+            docker start wikit
 
-            CC=o64-clang CXX=o64-clang++ cargo build --target x86_64-apple-darwin
+    - Run build
 
-    - Windows Toolchain
+            docker exec -it wikit bash /wikitdev/wikit/scripts/build_on_docker.sh
 
-        Install build tools
+        or just run
 
-            sudo pacman -S  mingw-w64-gcc
+            make publish
 
-        Install rust target and toolchain
-
-            rustup target add x86_64-pc-windows-gnu
-            rustup toolchain install stable-x86_64-pc-windows-gnu
-
-        Now you can build for Windows
-
-            cargo build --target x86_64-pc-windows-gnu
-
-        You may encounter some issues from library minilzo-rs, please refer this
-        [pull request](https://github.com/gmg137/minilzo-rs/pull/2) to fix.
+        The generated packages will be found in `release/` directory.
 
 # Development
 
