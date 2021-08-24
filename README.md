@@ -105,33 +105,24 @@ dictionary index seems does not work well.
 
 # Building
 
-- Build only for your development machine
+- Build for your development machine
 
         cargo build
 
 - Build cross-platform (mac, win, linux)
 
-    - Install [docker](https://www.docker.com/)
-    - Create development image
+    Ensure [docker](https://www.docker.com/) is installed and then
 
-            docker build -t wikitdev:v0.0.1 --progress plain --no-cache -f Dockerfile  .
+    - make development container
 
-        This command takes about 20 minutes to finish if you have a not-so-bad network.
+            make image
+            make container
 
-    - Create development container
-
-            docker run --name wikit -dit -v $(git rev-parse --show-toplevel):/wikitdev/wikit wikitdev:v0.0.1 bash
-            docker start wikit
-
-    - Run build
-
-            docker exec -it wikit bash /wikitdev/wikit/scripts/build_on_docker.sh
-
-        or just run
+    - build packages
 
             make publish
 
-        The generated packages will be found in `release/` directory.
+    The generated packages will be found in `release/` directory.
 
 # Development
 

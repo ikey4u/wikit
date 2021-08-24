@@ -22,5 +22,11 @@ test-parse: test-create
 clean:
 	@rm -rf wikit-mac-*.zip wikit-linux-*.zip wikit-win-*.zip
 
+image:
+	@bash ${PROJDIR}/scripts/build.sh image
+
+container:
+	@bash ${PROJDIR}/scripts/build.sh container
+
 publish:
 	@bash ${PROJDIR}/scripts/build.sh publish

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Note: you should only run this script in docker
 
 set -e
 
