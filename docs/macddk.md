@@ -1,6 +1,56 @@
 # mac 词典构建
 
-生成的词典目录如下
+到 https://developer.apple.com/download/all/ 搜索 dictionary, 然后会出现 Additional Tools for
+Xcode, 随便选择一个下载对应的 dmg 文件, 可以挂载也可以安装, 制作词典工具位于目录
+Dictionary Development Kit 中, 我已经将该目录中的文件提取出来了, 下载地址在[这里](https://github.com/ikey4u/macddk),
+这个目录的结构如下所示
+
+    .
+    ├── bin
+    │   ├── add_body_record
+    │   ├── add_key_index_record
+    │   ├── add_reference_index_record
+    │   ├── add_supplementary_key
+    │   ├── build_dict.sh
+    │   ├── build_key_index
+    │   ├── build_reference_index
+    │   ├── extract_front_matter_id.pl
+    │   ├── extract_index.pl
+    │   ├── extract_property.xsl
+    │   ├── extract_referred_id.pl
+    │   ├── generate_dict_template.sh
+    │   ├── make_body.pl
+    │   ├── make_dict_package
+    │   ├── make_line.pl
+    │   ├── make_readonly.pl
+    │   ├── normalize_key_text
+    │   ├── normalize_key_text.pl
+    │   ├── pick_referred_entry_id.pl
+    │   ├── remove_duplicate_key.pl
+    │   └── replace_entryid_bodyid.pl
+    ├── documents
+    │   ├── Dictionary\ Development\ Kit.rtf
+    │   ├── Dictionary\ Format.rtf
+    │   └── DictionarySchema
+    │       ├── AppleDictionarySchema.rng
+    │       └── modules
+    │           └── dict-struct.rng
+    ├── project_templates
+    │   ├── Makefile
+    │   ├── MyDictionary.css
+    │   ├── MyDictionary.xml
+    │   ├── MyInfo.plist
+    │   └── OtherResources
+    │       ├── Images
+    │       │   └── _internal_dictionary.png
+    │       ├── MyDictionary.xsl
+    │       └── MyDictionary_prefs.html
+    └── samples
+        ├── JapaneseDictionarySample.xml
+        ├── Sample.xml
+        └── SimpleSample.xml
+
+使用该工具生成的样例词典结构如下
 
     /My\ Dictionary.dictionary/Contents
     ├── Body.data
@@ -15,7 +65,7 @@
     ├── MyDictionary.xsl
     └── MyDictionary_prefs.html
 
-构建词典可以使用 `build_dict.sh`, 其用法如下
+构建词典的入口工具为 `build_dict.sh`, 其用法如下
 
     build_dict.sh ${BUILD_OPTS} ${DICT_NAME} ${DICT_SRC_PATH} ${DICT_CSS_PATH} ${DICT_PLIST_PATH}
 

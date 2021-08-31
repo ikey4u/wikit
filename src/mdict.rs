@@ -1,9 +1,11 @@
 use crate::elog;
 use crate::error::{Context, AnyResult, WikitError};
+use crate::reader::MDXSource;
+use crate::config::MAX_MDX_ITEM_SIZE;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::io::{Read, BufRead, BufReader, Write, Lines, Seek, SeekFrom};
+use std::io::{Read, BufReader, Write, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
 use std::path::{Path};
 
@@ -17,8 +19,6 @@ use encoding_rs::GB18030;
 use chrono::{DateTime, Local};
 
 type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
-// The max total size of MDX items (word or meaning) contained in one MDX block
-const MAX_MDX_ITEM_SIZE: usize = (2 << 20) as usize;
 
 #[derive(PartialEq)]
 pub enum ParseOption {
@@ -30,50 +30,6 @@ struct MDXInfo {
     encoding: String,
     integersz: u32,
     encid: u32,
-}
-
-struct MDXSource {
-    iter: Lines<BufReader<File>>,
-}
-
-impl Iterator for MDXSource {
-    type Item = (String, String);
-    fn next(&mut self) -> Option<Self::Item> {
-        let (mut word, mut meaning) = (String::new(), String::new());
-        loop {
-            match self.iter.next() {
-                Some(line) => match line {
-                    Ok(line) => {
-                        if line.trim() == "</>" {
-                            break;
-                        }
-                        if word.len() == 0 {
-                            word = line.trim().to_string();
-                        } else {
-                            meaning.push_str(line.as_str().trim());
-                        }
-                    },
-                    Err(_) => return None
-                },
-                None => return None
-            }
-        }
-        let mut word = if word.len() > MAX_MDX_ITEM_SIZE {
-            println!("[!] Lenght of word exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
-            word[..MAX_MDX_ITEM_SIZE].to_string()
-        } else {
-            word
-        };
-        word.push(0 as char);
-        let mut meaning = if meaning.len() > MAX_MDX_ITEM_SIZE {
-            println!("[!] Lenght of meaning exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
-            meaning[..MAX_MDX_ITEM_SIZE].to_string()
-        } else {
-            meaning
-        };
-        meaning.push(0 as char);
-        return Some((word, meaning));
-    }
 }
 
 fn bytes_to_u64(buf: &[u8], be: bool) -> u64 {
@@ -449,8 +405,8 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
     println!("[+] Parse meanings ...");
     let meanings: NomResult<Vec<u8>> = do_parse!(buf,
         meaning_block_count: take!(mdxinfo.integersz) >>
-        word_count: take!(mdxinfo.integersz)  >>
-        meaning_info_size: take!(mdxinfo.integersz) >>
+        _word_count: take!(mdxinfo.integersz)  >>
+        _meaning_info_size: take!(mdxinfo.integersz) >>
         meaning_block_size: take!(mdxinfo.integersz) >>
         meanings: map_res!(
             tuple!(
@@ -597,8 +553,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
     // Read MDX source file and sort (word, meaning) by word
     let path = srcpath.as_ref();
     let file = File::open(path).context(elog!("Cannot open {:?}", path.display()))?;
-    let reader = BufReader::new(file);
-    let mdxsrc = MDXSource { iter: reader.lines() };
+    let mdxsrc = MDXSource::new(file);
     let mut mdxitems: Vec<_> = mdxsrc.collect();
     mdxitems.sort_by_key(|k| k.clone().0);
     // Build offset table which is used to build block

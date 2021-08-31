@@ -7,6 +7,9 @@ use dirs;
 use ron::de::from_reader;
 use serde::Deserialize;
 
+// The max total size of MDX items (word or meaning) contained in one MDX block
+pub const MAX_MDX_ITEM_SIZE: usize = (2 << 20) as usize;
+
 pub const WIKIT_DEFAULT_CONFIG: &str = r#"
 (
     dburl: "postgresql://user@localhost:5432/dictdb",

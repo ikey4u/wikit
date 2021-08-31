@@ -2,8 +2,8 @@
 
 # What is it?
 
-To be short, Wikit is a tool which can (fully, may be in future) render and create dictionary file
-in MDX/MDD format.
+To be short, Wikit is a tool which can (fully, may be in future) create or parse dictionary file
+in MDX/MDD/Mac Dictionary format.
 
 This project is in very early stage, but you can try this [demo](http://106.53.152.194/wikit/)
 online or download electron wrapped client from here
@@ -31,7 +31,7 @@ There is no GUI but only CLI for Wikit for now, you can download the tool from [
 Decompress the release packege and just fireup the tool `wikit`, you will see detail help information,
 for example
 
-    wikit 0.1.0
+    wikit 0.2.0-beta.1
     ikey4u <pwnkeeper@gmail.com>
     A universal dictionary - Wikit
 
@@ -43,56 +43,56 @@ for example
         -V, --version    Prints version information
 
     SUBCOMMANDS:
+        dict      Process dictionary file
         help      Prints this message or the help of the given subcommand(s)
-        mdx       Process MDX file
+        mac       Create or parse mac dictionary from or into xml/mdx/txt
         server    Run wikit as an API server
 
-There are serveral subcommands: `mdx` and `server`. However `server` is not stable for now,
-please use it carefully. For `mdx` subcommand, you can print its help information using following command
+There are serveral subcommands: `dict` and `server`. However `server` is not stable for now,
+please use it carefully. For `dict` subcommand, you can print its help information using following command
 
-    wikit mdx
+    wikit dict
 
 An example output is showed below
 
-    Process MDX file
+    Process dictionary file
 
     USAGE:
-        wikit mdx [FLAGS] [OPTIONS] <input>
+        wikit dict [FLAGS] [OPTIONS] <input>
 
     FLAGS:
-        -c, --create     Create mdx file
+        -c, --create     Create dictionary file
         -h, --help       Prints help information
-            --info       Dump basic information of mdx file
-            --meta       You could specify a meta file when create mdx file. Wikit will use default meta info if this option
-                         is not provided. The template is given below(include the parentheses):
-                         (
-                             title: "A generic MDX dictionary",
-                             author: "An anonymous hero",
-                             description: "Just for fun",
-                         )
-        -p, --parse      Parse mdx file
+            --info       Dump basic information of dictionary file
         -V, --version    Prints version information
 
     OPTIONS:
+            --meta <metafile>    You could specify a meta file when create dictionary file. Wikit will use default meta info
+                                 if this option is not provided. The template is given below(include the parentheses):
+                                 (
+                                     title: "A generic MDX dictionary",
+                                     author: "An anonymous hero",
+                                     description: "Just for fun",
+                                 )
         -o, --output <output>    Same with <input>
             --table <table>      The table name in the database, you must provide this parameter if input/output is a
                                  database url
 
     ARGS:
-        <input>    The input file format depends on the value. If the value has a suffix .txt, then the input is a txt
-                   file; If the value has a suffix .mdx, then the input is a mdx file; If the value is a database url
-                   such as postgresql://user@localhost:5432/dictdb, then the input is a database
+        <input>    The input file format depends on the value. File suffix reflects the format: .txt => text, .mdx =>
+                   mdx. If the value is a database url such as postgresql://user@localhost:5432/dictdb, then the input
+                   is a database
 
 Some usage examples
 
     # Create a mdx file from text source
-    wikit mdx --create --output /path/to/dict.mdx /path/to/dict.txt
+    wikit dict --create --output /path/to/dict.mdx /path/to/dict.txt
 
     # Parse a mdx into text source
-    wikit mdx --parse --output /path/to/dict.txt /path/to/dict.mdx
+    wikit dict --create --output /path/to/dict.txt /path/to/dict.mdx
 
     # Dump information from mdx file
-    wikit mdx --info /path/to/dict.mdx
+    wikit dict --info /path/to/dict.mdx
 
 # Compatibility
 
@@ -130,13 +130,7 @@ Firstly, you should familiar with MDX format which is showed in the following il
 view it in fullscreen [here](https://raw.githubusercontent.com/ikey4u/wikit/master/docs/imgs/mdx-format.svg)):
 ![mdx format](./docs/imgs/mdx-format.svg "mdx format")
 
-Secondly, download a MDX dictionary from anywhere and save it to somewhere, run the following
-command to do quick and dirty development
-
-    # create MDX file
-    make test-create
-    # parse MDX file
-    make test-parse
+Secondly, download a MDX dictionary from anywhere and save it to somewhere, see `makefile` for detail.
 
 Finally, turn your thoughts into codes and make the contributions, cool developer!
 
@@ -155,9 +149,9 @@ Finally, turn your thoughts into codes and make the contributions, cool develope
 - [x] MDX 1.2 parsing
 - [x] MDX 2.0 parsing
 - [x] MDX 2.0 writing
-- [ ] Integrated testing
-- [ ] Create desktop client for Linux, Mac and Windows
+- [ ] Create mac dictionary (WIP)
 - [ ] MDD parsing
+- [ ] Create desktop client for Linux, Mac and Windows
 - [ ] GUI tools to create, parse and modify MDX
 - [ ] Create mobile client for Android and iOS
 
