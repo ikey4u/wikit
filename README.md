@@ -45,7 +45,6 @@ for example
     SUBCOMMANDS:
         dict      Process dictionary file
         help      Prints this message or the help of the given subcommand(s)
-        mac       Create or parse mac dictionary from or into xml/mdx/txt
         server    Run wikit as an API server
 
 There are serveral subcommands: `dict` and `server`. However `server` is not stable for now,
@@ -130,7 +129,8 @@ Firstly, you should familiar with MDX format which is showed in the following il
 view it in fullscreen [here](https://raw.githubusercontent.com/ikey4u/wikit/master/docs/imgs/mdx-format.svg)):
 ![mdx format](./docs/imgs/mdx-format.svg "mdx format")
 
-Secondly, download a MDX dictionary from anywhere and save it to somewhere, see `makefile` for detail.
+Secondly, download a MDX dictionary from anywhere and save it to somewhere, to process the mdx file,
+see `makefile` for detail.
 
 Finally, turn your thoughts into codes and make the contributions, cool developer!
 

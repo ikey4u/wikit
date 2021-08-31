@@ -135,13 +135,6 @@ async fn main() -> AnyResult<()> {
                 .takes_value(false)
             )
         )
-        .subcommand(
-            SubCommand::with_name("mac")
-            .setting(AppSettings::ArgRequiredElseHelp)
-            .setting(AppSettings::ColoredHelp)
-            .about("Create or parse mac dictionary from or into xml/mdx/txt")
-            .arg(Arg::with_name("--create"))
-        )
         .get_matches();
 
     if let Some(dict) = matches.subcommand_matches("dict") {
