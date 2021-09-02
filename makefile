@@ -1,6 +1,8 @@
 PROJDIR=$(shell git rev-parse --show-toplevel)
 VERSION=$(shell cat src/main.rs | grep version| grep -oE "[0-9]{1,2}.[0-9]{1,2}.[0-9]")
 
+.PHONY: test
+
 build:
 	@cargo build
 
@@ -33,3 +35,9 @@ publish:
 
 mac:
 	@cargo run --bin wikit -- dict --create --output output.dictionary test/demo.txt
+
+test:
+	@cargo test test_argparser
+
+d:
+	@cargo test debug -- --nocapture
