@@ -11,6 +11,7 @@ struct ArgParser<'a> {
 
 impl<'a> ArgParser<'a> {
     fn new(buf: &'a str) -> Self {
+        let buf = buf.trim();
         ArgParser {
             buf: buf,
             consumed: 0,
@@ -28,14 +29,21 @@ impl<'a> Iterator for ArgParser<'a> {
 
         let mut arg = String::new();
         let (mut quote, mut quotech) = (false, ' ');
+        // Mark the ends of an argument parsing
+        let mut spaced = false;
         for c in self.buf.chars().skip(self.consumed) {
             self.consumed += 1;
-            // take string until the next same `c` or end
             if quote || c == '\'' || c == '\"' {
+                if spaced {
+                    self.consumed -= 1;
+                    break;
+                }
+                // Take until the next same `c` or end
                 if quote {
                     if c == quotech {
                         quote = false;
                     } else {
+                        // Note that spaces in quote will also go here and keeped as they were
                         arg.push(c);
                     }
                 } else {
@@ -43,11 +51,21 @@ impl<'a> Iterator for ArgParser<'a> {
                     quotech = c;
                 }
             } else if c == ' ' {
-                if !quote {
-                    break;
+                // Discard any non-quote repeted space
+                if !spaced {
+                    spaced = true;
                 }
             } else {
-                arg.push(c);
+                if spaced {
+                    // All repeted spaces are consumed, and we have consumed once more non-spaced
+                    // char, so we should end the parsing and go back one position. Notice that
+                    // only non-quote space will go here, since all quote space will go into the
+                    // first if branch.
+                    self.consumed -= 1;
+                    break;
+                } else {
+                    arg.push(c);
+                }
             }
         }
         return Some(arg);
@@ -77,11 +95,25 @@ pub fn runcmd(cmd: &str) -> AnyResult<String> {
 
 #[test]
 fn test_argparser() {
-    let cmd = "git clone https://github.com/ikey4u/macddk '~/Library/Application Support/wikit/macddk'";
+    let cmd = "a bc def";
     let mut argparser = ArgParser::new(cmd);
-    assert_eq!(Some("git".into()), argparser.next());
-    assert_eq!(Some("clone".into()), argparser.next());
-    assert_eq!(Some("https://github.com/ikey4u/macddk".into()), argparser.next());
-    assert_eq!(Some("~/Library/Application Support/wikit/macddk".into()), argparser.next());
-    assert_eq!(None, argparser.next());
+    assert_eq!(Some("a".into()), argparser.next());
+    assert_eq!(Some("bc".into()), argparser.next());
+    assert_eq!(Some("def".into()), argparser.next());
+
+    let cmd = " a bc  def   ghi ";
+    let mut argparser = ArgParser::new(cmd);
+    assert_eq!(Some("a".into()), argparser.next());
+    assert_eq!(Some("bc".into()), argparser.next());
+    assert_eq!(Some("def".into()), argparser.next());
+    assert_eq!(Some("ghi".into()), argparser.next());
+
+    let cmd = " a bc 'def ghi' 'jkl  mno' 'pqr   st' ' x y z  ' ";
+    let mut argparser = ArgParser::new(cmd);
+    assert_eq!(Some("a".into()), argparser.next());
+    assert_eq!(Some("bc".into()), argparser.next());
+    assert_eq!(Some("def ghi".into()), argparser.next());
+    assert_eq!(Some("jkl  mno".into()), argparser.next());
+    assert_eq!(Some("pqr   st".into()), argparser.next());
+    assert_eq!(Some(" x y z  ".into()), argparser.next());
 }
