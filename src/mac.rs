@@ -1,7 +1,5 @@
-use crate::elog;
 use crate::error::{AnyResult, Context};
-use crate::config;
-use crate::util;
+use crate::{util, xhtml, config, elog};
 
 use std::path::Path;
 use std::env::consts;
@@ -112,7 +110,8 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
             );
             for line in entry.lines() {
                 let line = line.replace(r#"<?xml version="1.0" encoding="UTF-8"?>"#, "")
-                    .replace("&", "&amp;");
+                    .replace("<entry>", "").replace("</entry>", "");
+                let line = xhtml::normalize(&line);
                 fxml.write_all(line.as_bytes())?;
                 fxml.write_all(b"\n")?;
             }
