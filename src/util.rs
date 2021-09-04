@@ -2,6 +2,7 @@ use crate::elog;
 use crate::error::{AnyResult, Context};
 
 use std::process::Command;
+use std::collections::HashMap;
 
 struct ArgParser<'a> {
     buf: &'a str,
@@ -72,13 +73,18 @@ impl<'a> Iterator for ArgParser<'a> {
     }
 }
 
-pub fn runcmd(cmd: &str) -> AnyResult<String> {
+pub fn runcmd(cmd: &str, envs: Option<Vec<(String, String)>>) -> AnyResult<String> {
     let argparser = ArgParser::new(cmd);
     let cmd: Vec<String> = argparser.into_iter().collect();
+    let envs: HashMap<String, String> = if let Some(envs) = envs {
+        envs.into_iter().collect()
+    } else {
+        HashMap::new()
+    };
     let outbuf = match cmd.len() {
         0 => return Err(elog!("Empty command")),
-        1 => Command::new(&cmd[0]).output(),
-        _ => Command::new(&cmd[0]).args(&cmd[1..]).output(),
+        1 => Command::new(&cmd[0]).envs(&envs).output(),
+        _ => Command::new(&cmd[0]).envs(&envs).args(&cmd[1..]).output(),
     };
     let outbuf = outbuf.context(elog!("failed to run command {:?}", cmd))?;
     if !outbuf.status.success() {
