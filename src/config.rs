@@ -1,7 +1,9 @@
 use crate::error::{AnyResult, Context};
 use crate::elog;
 
-use std::{fs::File, collections::HashMap};
+use std::fs::{self, File};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 use dirs;
 use ron::de::from_reader;
@@ -27,7 +29,7 @@ pub struct WikitConfig {
 }
 
 pub fn load_config() -> AnyResult<WikitConfig> {
-    let confdir = dirs::config_dir().context(elog!("Cannot get user config directory"))?;
+    let confdir = get_config_dir().context(elog!("cannot get user config directory"))?;
     let confpath = confdir.join("wikit").join("wikit.ron");
     let f = File::open(&confpath)
         .context(
@@ -39,4 +41,19 @@ pub fn load_config() -> AnyResult<WikitConfig> {
     let wikit_config: WikitConfig = from_reader(f)
         .context(elog!("Cannot load config file: {:?}", confpath))?;
     Ok(wikit_config)
+}
+
+pub fn init_config_dir() -> AnyResult<()> {
+    let confdir = get_config_dir().context(elog!("cannot get user config directory"))?;
+    let confdir = confdir.as_path();
+    if !confdir.exists() {
+        fs::create_dir_all(confdir).context(elog!("failed to create {}", confdir.display()))?;
+    }
+    Ok(())
+}
+
+pub fn get_config_dir() -> AnyResult<PathBuf> {
+    let sysconfdir = dirs::config_dir().context(elog!("cannot get system config directory"))?;
+    let confdir = sysconfdir.join("wikit");
+    return Ok(confdir);
 }

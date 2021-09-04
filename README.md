@@ -66,6 +66,7 @@ An example output is showed below
         -V, --version    Prints version information
 
     OPTIONS:
+            --css <css>          Path of the CSS file
             --meta <metafile>    You could specify a meta file when create dictionary file. Wikit will use default meta info
                                  if this option is not provided. The template is given below(include the parentheses):
                                  (
@@ -92,6 +93,12 @@ Some usage examples
 
     # Dump information from mdx file
     wikit dict --info /path/to/dict.mdx
+
+    # Create mac dictionary from MDX
+	wikit dict --create --output test/macmillan.dictionary ~/Downloads/macmillan.mdx
+
+    # Create mac dictionary from text(mdx soure file)
+	wikit dict --create --output test/demo.dictionary test/demo.txt
 
 # Compatibility
 

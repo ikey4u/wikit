@@ -4,6 +4,7 @@ mod config;
 mod router;
 mod mac;
 mod reader;
+mod util;
 
 use crate::error::{AnyResult, Context};
 
@@ -74,10 +75,12 @@ impl ResourceFormat {
 
 #[rocket::main]
 async fn main() -> AnyResult<()> {
+    config::init_config_dir().context(elog!("cannot init wikit config directory"))?;
+
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
-        .version("0.2.0-beta.1")
+        .version("0.2.0")
         .author("ikey4u <pwnkeeper@gmail.com>")
         .about("A universal dictionary - Wikit")
         .subcommand(
@@ -110,6 +113,11 @@ async fn main() -> AnyResult<()> {
                 .help("Same with <input>")
                 .short("-o")
                 .long("--output")
+                .takes_value(true)
+            )
+            .arg(Arg::with_name("css")
+                .help("Path of the CSS file")
+                .long("--css")
                 .takes_value(true)
             )
             .arg(Arg::with_name("table")
@@ -152,6 +160,11 @@ async fn main() -> AnyResult<()> {
         } else {
             let output = value_t_or_exit!(dict.value_of("output"), String);
             let otype = ResourceFormat::new(&output).ok_or(elog!("Failed to get output resource format"))?;
+            let css = if let Some(css) = dict.value_of("css") {
+                Some(css.to_string())
+            } else {
+                None
+            };
 
             if dict.is_present("create") {
                 let meta = match dict.value_of("metafile") {
@@ -183,7 +196,11 @@ async fn main() -> AnyResult<()> {
                     (ResourceFormat::TEXT, ResourceFormat::MACDICT) => {
                         let file = File::open(&input).context(elog!("Cannot open {:?}", &input))?;
                         let mdxsrc = reader::MDXSource::new(file);
-                        mac::create_mac_dictionary(mdxsrc, output)?;
+                        mac::create_mac_dictionary(mdxsrc, input, output, css).context(elog!("Failed to create mac dictionary"))?;
+                    },
+                    (ResourceFormat::MDX, ResourceFormat::MACDICT) => {
+                        let dict = mdict::parse_mdx(input.as_str(), None)?;
+                        mac::create_mac_dictionary(dict.into_iter(), input, output, css).context(elog!("Failed to create mac dictionary"))?;
                     },
                     (ResourceFormat::MDX, ResourceFormat::POSTGRES) => {
                         let table = dict.value_of("table").expect("Please specify database table name");

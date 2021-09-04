@@ -53,4 +53,3 @@ impl Iterator for MDXSource {
         return Some((word, meaning));
     }
 }
-

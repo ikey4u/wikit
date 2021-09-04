@@ -132,7 +132,7 @@ struct MdxPacket<'a> {
 }
 
 impl<'a> MdxPacket<'a> {
-    fn new(buf: &'a[ u8], packetsz: u64) -> AnyResult<Self> {
+    fn new(buf: &'a [u8], packetsz: u64) -> AnyResult<Self> {
         let r: NomResult<_> = tuple!(buf, le_u32, take!(4), take!(packetsz - 8));
         let (remain, (packtype, adler32buf, data)) = r.context(elog!("parse mdx packet header"))?;
         let adler32 = u32::from_be_bytes(

@@ -34,7 +34,7 @@ publish:
 	@bash ${PROJDIR}/scripts/build.sh publish
 
 mac:
-	@cargo run --bin wikit -- dict --create --output output.dictionary test/demo.txt
+	@cargo run --bin wikit -- dict --create --output test/demo.dictionary test/demo.txt
 
 test:
 	@cargo test test_argparser
