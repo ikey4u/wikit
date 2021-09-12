@@ -1,10 +1,10 @@
 use crate::error::{AnyResult, Context};
-use crate::{util, xhtml, config, elog};
+use crate::{util, config, elog};
 
 use std::path::Path;
 use std::env::consts;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Write, BufWriter};
 use std::collections::BTreeMap;
 
 use dialoguer::Input;
@@ -81,12 +81,13 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
 
     let dsrc = {
         let xml = workdir.join("".to_string() + input_stem + ".xml");
-        let mut fxml = File::create(&xml).context(elog!("cannot create xml file: {}", xml.display()))?;
+        let fxml = File::create(&xml).context(elog!("cannot create xml file: {}", xml.display()))?;
+        let mut writer = BufWriter::new(fxml);
 
-        fxml.write_all(r#"<?xml version="1.0" encoding="UTF-8"?>"#.as_bytes())?;
-        fxml.write_all(b"\n")?;
-        fxml.write_all(r#"<d:dictionary xmlns="http://www.w3.org/1999/xhtml" xmlns:d="http://www.apple.com/DTDs/DictionaryService-1.0.rng">"#.as_bytes())?;
-        fxml.write_all(b"\n")?;
+        writer.write(r#"<?xml version="1.0" encoding="UTF-8"?>"#.as_bytes())?;
+        writer.write(b"\n")?;
+        writer.write(r#"<d:dictionary xmlns="http://www.w3.org/1999/xhtml" xmlns:d="http://www.apple.com/DTDs/DictionaryService-1.0.rng">"#.as_bytes())?;
+        writer.write(b"\n")?;
 
         let mut bitmap = BTreeMap::new();
         let nullchar = char::from(0);
@@ -108,17 +109,16 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
                 entry_index=word,
                 entry_body=meaning,
             );
-            for line in entry.lines() {
-                let line = line.replace(r#"<?xml version="1.0" encoding="UTF-8"?>"#, "")
-                    .replace("<entry>", "").replace("</entry>", "");
-                let line = xhtml::normalize(&line);
-                fxml.write_all(line.as_bytes())?;
-                fxml.write_all(b"\n")?;
-            }
+            let entry = entry.replace(r#"<?xml version="1.0" encoding="UTF-8"?>"#, "")
+                .replace("<entry>", "").replace("</entry>", "")
+                .replace("&", "&amp;");
+            writer.write(entry.as_bytes())?;
+            writer.write(b"\n")?;
         }
 
-        fxml.write_all(b"</d:dictionary>")?;
-        fxml.write_all(b"\n")?;
+        writer.write(b"</d:dictionary>")?;
+        writer.write(b"\n")?;
+        writer.flush()?;
 
         xml
     };

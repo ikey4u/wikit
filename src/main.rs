@@ -5,14 +5,12 @@ mod router;
 mod mac;
 mod reader;
 mod util;
-mod xhtml;
 
 use crate::error::{AnyResult, Context};
 
 use std::path::Path;
 use std::ffi::OsStr;
-use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::fs::File;
 
 use clap::{Arg, App, SubCommand, AppSettings, value_t_or_exit};
 use once_cell::sync::Lazy;
@@ -81,7 +79,7 @@ async fn main() -> AnyResult<()> {
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
-        .version("0.2.1")
+        .version("0.2.2")
         .author("ikey4u <pwnkeeper@gmail.com>")
         .about("A universal dictionary - Wikit")
         .subcommand(
@@ -183,25 +181,38 @@ async fn main() -> AnyResult<()> {
                     },
                     (ResourceFormat::MDX, ResourceFormat::TEXT) => {
                         let dict = mdict::parse_mdx(input.as_str(), None)?;
-                        let mut dstmdx = OpenOptions::new()
-                            .write(true)
-                            .create(true)
-                            .truncate(true)
-                            .open(&output)
-                            .context(elog!("Cannot open {:?}", &output))?;
-                        for (word, meaning) in dict {
-                            let item = format!("{}\n{}\n</>\n", word, meaning);
-                            dstmdx.write(item.as_bytes())?;
-                        }
+                        mdict::write_into_text(dict, &output)?;
                     },
                     (ResourceFormat::TEXT, ResourceFormat::MACDICT) => {
                         let file = File::open(&input).context(elog!("Cannot open {:?}", &input))?;
                         let mdxsrc = reader::MDXSource::new(file);
-                        mac::create_mac_dictionary(mdxsrc, input, output, css).context(elog!("Failed to create mac dictionary"))?;
+                        mac::create_mac_dictionary(mdxsrc, input, output, css)
+                            .context(elog!("Failed to create mac dictionary"))?;
                     },
                     (ResourceFormat::MDX, ResourceFormat::MACDICT) => {
-                        let dict = mdict::parse_mdx(input.as_str(), None)?;
-                        mac::create_mac_dictionary(dict.into_iter(), input, output, css).context(elog!("Failed to create mac dictionary"))?;
+                        let (pdir, stem, _suffix) = util::parse_path(input.as_str())
+                            .context(elog!("failed to get path of input file: {}", input))?;
+                        let textpath = pdir.join(stem + "_wikit.txt");
+                        if !textpath.exists() {
+                            let dict = mdict::parse_mdx(input.as_str(), None)?;
+                            if mdict::write_into_text(dict, textpath.as_path()).is_err() {
+                                std::fs::remove_file(textpath.as_path())
+                                    .context(elog!("cannot remove file {}", textpath.display()))?;
+                            };
+                        }
+                        println!("[+] Open mdx soure file ...");
+                        let file = File::open(&textpath)
+                            .context(elog!("Cannot open {:?}", textpath.display()))?;
+                        let mdxsrc = reader::MDXSource::new(file);
+                        println!("[+] Create mac dictionary ...");
+                        mac::create_mac_dictionary(mdxsrc, input, output, css)
+                            .context(elog!("Failed to create mac dictionary"))?;
+                        println!("[+] Create mac dictionary is done");
+                        if textpath.exists() {
+                            std::fs::remove_file(textpath.as_path()).context(
+                                elog!("cannot remove file {}, you may remove it manually", textpath.display())
+                            )?;
+                        }
                     },
                     (ResourceFormat::MDX, ResourceFormat::POSTGRES) => {
                         let table = dict.value_of("table").expect("Please specify database table name");

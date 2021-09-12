@@ -3,6 +3,7 @@ use crate::error::{AnyResult, Context};
 
 use std::process::Command;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 struct ArgParser<'a> {
     buf: &'a str,
@@ -99,6 +100,22 @@ pub fn runcmd(cmd: &str, envs: Option<Vec<(String, String)>>) -> AnyResult<Strin
     Ok(output.to_string())
 }
 
+/// parse_path returns a three-element tuple which is `(parentdir, stem, suffix)`
+pub fn parse_path(filepath: &str) -> AnyResult<(PathBuf, String, String)> {
+    let stdpath = std::fs::canonicalize(filepath)
+        .context(elog!("filepath [{}] is not exist", filepath))?;
+    let parentdir = stdpath.parent()
+        .context(elog!("cannot get parent directory of {}", stdpath.display()))?;
+    let stem = stdpath.file_stem()
+        .context(elog!("cannot get file stem from [{}]", stdpath.display()))?
+        .to_str().context(elog!("cannot convert osstr to str"))?;
+    let suffix = stdpath.extension()
+        .context(elog!("cannot get extension of [{}]", stdpath.display()))?
+        .to_str().context(elog!("cannot convert osstr to str"))?;
+
+    Ok((parentdir.to_path_buf(), stem.to_string(), suffix.to_string()))
+}
+
 #[test]
 fn test_argparser() {
     let cmd = "a bc def";
@@ -122,4 +139,15 @@ fn test_argparser() {
     assert_eq!(Some("jkl  mno".into()), argparser.next());
     assert_eq!(Some("pqr   st".into()), argparser.next());
     assert_eq!(Some(" x y z  ".into()), argparser.next());
+}
+
+#[test]
+fn debug() {
+    let p = parse_path("test/demo.txt");
+    if let Ok(p) = p {
+        assert_eq!(p.1.as_str(), "demo");
+        assert_eq!(p.2.as_str(), "txt");
+    } else {
+        assert_eq!(true, false);
+    }
 }

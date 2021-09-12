@@ -17,6 +17,7 @@ use adler::Adler32;
 use ripemd128::{Ripemd128, Digest};
 use encoding_rs::GB18030;
 use chrono::{DateTime, Local};
+use indicatif::ProgressBar;
 
 type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 
@@ -468,7 +469,10 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
 
     let mut word_meaning_list: Vec<(String, String)> = vec![];
     println!("[+] Combine words and meanings ...");
-    for i in 0..words.len() {
+    let wordcnt = words.len();
+    let bar = ProgressBar::new(wordcnt as u64);
+    for i in 0..wordcnt {
+        bar.inc(1);
         let (start, word) = (words[i].1 as usize, words[i].0.clone());
         let end = if i == 0 {
             // the first element
@@ -492,6 +496,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
             ))?;
         word_meaning_list.push((word, meaning));
     }
+    bar.finish_with_message("Parsing MDX is done!");
 
     Ok(word_meaning_list)
 }
@@ -825,6 +830,23 @@ pub async fn save_into_db(dict: Vec<(String, String)>, dburl: &str, table: &str)
         .fetch_one(&pool)
         .await?;
     println!("[+] The number of record in table {} is: {:?}", table, rows.0);
+    Ok(())
+}
+
+pub fn write_into_text<P>(dict: Vec<(String, String)>, output: P) -> AnyResult<()>
+    where P: AsRef<Path>
+{
+    let mut text = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(output.as_ref())
+        .context(elog!("Cannot open {:?}", output.as_ref().display()))?;
+    for (word, meaning) in dict {
+        let item = format!("{}\n{}\n</>\n", word, meaning);
+        text.write(item.as_bytes())?;
+    }
+
     Ok(())
 }
 

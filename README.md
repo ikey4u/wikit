@@ -100,6 +100,31 @@ Some usage examples
     # Create mac dictionary from text(mdx soure file)
 	wikit dict --create --output test/demo.dictionary test/demo.txt
 
+Especially, when you create macos dictionary from MDX, the format used in mac is
+XHTML rather than HTML. As a result, you may encounter some errors such as
+
+       parser error : Couldn't find end of Start Tag link
+       <link  href="concise_bing.css" rel="stylesheet" type="text/css"
+
+and the link tag may look like
+
+       <link  href="concise_bing.css" rel="stylesheet" type="text/css">
+
+or
+
+       <link  href="concise_bing.css" rel="stylesheet" type="text/css" //>
+
+In the case above, the error is caused by the not self-enclosing tag `<link>`, the right content in XHTML
+style is showed below
+
+       <link  href="concise_bing.css" rel="stylesheet" type="text/css" />
+
+To solve the problem, you can change the intermedia text file(in fact, it is the MDX source) whose name
+is `${MDX_NAME}_wikit.txt` where `{MDX_NAME}` is your MDX file name. And it could be found in the same
+directory of your MDX file. Let's say you have a MDX file located in `/path/to/mymdx.mdx`,
+the corresponding text file will be `/path/to/mymdx_wikit.txt`. If you have trouble with XHTML,
+you could change `/path/to/mymdx_wikit.txt` and run the build command again.
+
 # Compatibility
 
 The first-class citizens supported by Wikit are opensourced dictionary tools such as
@@ -156,10 +181,9 @@ Finally, turn your thoughts into codes and make the contributions, cool develope
 - [x] MDX 1.2 parsing
 - [x] MDX 2.0 parsing
 - [x] MDX 2.0 writing
-- [ ] Create mac dictionary (WIP)
+- [x] Create mac dictionary
+- [ ] Create desktop client for Linux, Mac and Windows (WIP)
 - [ ] MDD parsing
-- [ ] Create desktop client for Linux, Mac and Windows
-- [ ] GUI tools to create, parse and modify MDX
 - [ ] Create mobile client for Android and iOS
 
 # License
