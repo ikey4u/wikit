@@ -31,4 +31,8 @@ google it. If these tools are ready, following below command to start developmen
 
         npm run tauri dev
 
+    or run the following command if you have installed tauri-cli using `cargo install tauri-cli`
+
+        cargo tauri dev
+
 Start coding!
