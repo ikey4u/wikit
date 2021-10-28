@@ -1,9 +1,11 @@
-use super::WIKIT_CONFIG;
-
 use sqlx::postgres::PgPoolOptions;
 use rocket::{Build, Request, response::content, catch, get, catchers, routes};
 use regex::Regex;
+use once_cell::sync::Lazy;
 
+static WIKIT_CONFIG: Lazy<crate::config::WikitConfig> = Lazy::new(|| {
+    crate::config::load_config().expect("Cannot load wikit config")
+});
 
 #[catch(500)]
 fn internal_error() -> &'static str {

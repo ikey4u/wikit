@@ -1,11 +1,11 @@
 [package]
-name = "app"
+name = "WikitDesktop"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
-default-run = "app"
+description = "Wikit Desktop - A universal dictionary for human"
+authors = ["ikey4u <pwnkeeper@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/ikey4u/wikit"
+default-run = "WikitDesktop"
 edition = "2021"
 build = "src/build.rs"
 
@@ -19,6 +19,7 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tauri = { git = "https://github.com/tauri-apps/tauri/", rev = "651fc01492f74cc0dafba20b2fcbbb7a3a3f05e1", features = ["api-all"] }
 reqwest = { version = "0.11", features = ["blocking", "json"] }
+wikit-core = { path = "../../core" }
 
 [features]
 default = [ "custom-protocol" ]

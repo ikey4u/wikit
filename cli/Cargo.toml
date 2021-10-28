@@ -1,0 +1,15 @@
+[package]
+name = "wikit-cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wikit-core = { path = "../core" }
+clap = "2"
+serde = "1.0"
+serde_derive = "1.0"
+ron = "0.6.4"
+rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "0d53e23" }
+anyhow = "1.0.38"

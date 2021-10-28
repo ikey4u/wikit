@@ -1,25 +1,19 @@
-mod mdict;
-mod error;
-mod config;
-mod router;
-mod mac;
-mod reader;
-mod util;
-
-use crate::error::{AnyResult, Context};
+use wikit_core::mdict;
+use wikit_core::config;
+use wikit_core::router;
+use wikit_core::mac;
+use wikit_core::reader;
+use wikit_core::util;
+use wikit_core::elog;
+use wikit_core::error::{AnyResult, Context};
 
 use std::path::Path;
 use std::ffi::OsStr;
 use std::fs::File;
 
 use clap::{Arg, App, SubCommand, AppSettings, value_t_or_exit};
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use ron::de::from_reader;
-
-static WIKIT_CONFIG: Lazy<config::WikitConfig> = Lazy::new(|| {
-    config::load_config().expect("Cannot load wikit config")
-});
 
 #[derive(Debug, Deserialize)]
 pub struct MDXMeta {
