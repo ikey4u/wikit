@@ -2,34 +2,42 @@
 
 # What is it?
 
-To be short, Wikit is a tool which can (fully, may be in future) create or parse dictionary file
-in MDX/MDD/Mac Dictionary format.
+To be short, Wikit is a dictionary suite for human in [FOSS](https://en.wikipedia.org/wiki/Free_and_open-source_software) style.
 
-This project is in very early stage, but you can try this [demo](http://106.53.152.194/wikit/)
-online or download electron wrapped client from here
-[Releases](https://github.com/ikey4u/wikit/releases).
+So what are planned to be included? The goal of this project is to make
 
-# Why it?
+- A CLI tool to deal with a variety of dictionary formats
 
-MDX/MDD is a popular closed-source dictionary format which you can find many dictionaries made by a
-variety of folks on [pdawiki](https://www.pdawiki.com) or [freemdict](https://freemdict.com/).
-All of these should give appreciations to the hero of `xwang` who firstly released full
-reverse-engineering analysis of MDX/MDD format, which you can find
-[here](https://bitbucket.org/xwang/mdict-analysis/src/master/).
+- Desktop application for Windows, Linux and MacOS
 
-Several reasons make me write this project
+- A dictionary server
 
-- I am a heavy user of dictionary since I often read english books or papers
-- For what I can tell now, no project about MDX/MDD is actively maintained
-- No platform-agnostic, user-friendly, fully-opensourced and free dictionary for now
-- I love rust programming
+- Mobile application for Android and iOS
+
+# What is the project status?
+
+- CLI TOOL
+
+    The CLI tool can parse/create MDX dictionary and create macos dictionary, see its usage in
+    `Installation and Usage` section.
+
+- DESKTOP APPLICATION
+
+    It is developed based on [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/), working in progress.
+
+- DICTIONARY SERVER
+
+    A quick and dirty demo is developed in `core/src/router.rs`, and here is the
+    [demo](http://106.53.152.194/wikit/).
+
+- MOBILE APPLICATION
+
+    No action for now.
 
 # Installation and Usage
 
-There is no GUI but only CLI for Wikit for now, you can download the tool from [release](https://github.com/ikey4u/wikit/releases) page.
-
-Decompress the release packege and just fireup the tool `wikit`, you will see detail help information,
-for example
+Download the tool from [release](https://github.com/ikey4u/wikit/releases) page, decompress the
+release packege and just fireup the tool `wikit`, you will see detail help information, for example
 
     wikit 0.2.0-beta.1
     ikey4u <pwnkeeper@gmail.com>
@@ -154,37 +162,6 @@ dictionary index seems does not work well.
             make publish
 
     The generated packages will be found in `release/` directory.
-
-# Development
-
-Firstly, you should familiar with MDX format which is showed in the following illustraion (you can
-view it in fullscreen [here](https://raw.githubusercontent.com/ikey4u/wikit/master/docs/imgs/mdx-format.svg)):
-![mdx format](./docs/imgs/mdx-format.svg "mdx format")
-
-Secondly, download a MDX dictionary from anywhere and save it to somewhere, to process the mdx file,
-see `makefile` for detail.
-
-Finally, turn your thoughts into codes and make the contributions, cool developer!
-
-# Credits
-
-- [An Analysis of MDX/MDD File Format](https://bitbucket.org/xwang/mdict-analysis/src/master/) by [xwang](https://bitbucket.org/xwang)
-
-    The first attempt to analysis MDX/MDD file format.
-
-- [writemdict](https://github.com/zhansliu/writemdict) by [zhansliu](https://github.com/zhansliu)
-  
-    A python library to generate MDX file and give a detail description of MDX format.
-
-# Roadmap
-
-- [x] MDX 1.2 parsing
-- [x] MDX 2.0 parsing
-- [x] MDX 2.0 writing
-- [x] Create mac dictionary
-- [ ] Create desktop client for Linux, Mac and Windows (WIP)
-- [ ] MDD parsing
-- [ ] Create mobile client for Android and iOS
 
 # License
 
