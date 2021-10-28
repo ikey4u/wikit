@@ -72,8 +72,8 @@ fn main() {
                 "about" => {
                     println!("click about menu");
                 },
-                _ => {
-                    println!("unkown menu event");
+                id @ _ => {
+                    println!("unkown menu event: {}", id);
                 }
            }
         })
@@ -82,12 +82,13 @@ fn main() {
         .expect("error while running tauri application");
 
     app.run(|app_handle, e| match e {
+        // Application is ready (triggered only once)
         Event::Ready => {
-            println!("Wikit is ready!");
         },
         Event::CloseRequested { label, api, .. } => {
             let app_handle = app_handle.clone();
             let window = app_handle.get_window(&label).unwrap();
+            // prevent the event loop to close
             api.prevent_close();
             dialog::ask(
                 Some(&window),
@@ -95,6 +96,7 @@ fn main() {
                 "Are you sure that you want to close this window?",
                 move |answer| {
                     if answer {
+                        // .close() cannot be called on the main thread
                         std::thread::spawn(move || {
                             app_handle.get_window(&label).unwrap().close().unwrap();
                         });
@@ -103,6 +105,8 @@ fn main() {
             );
         },
         Event::ExitRequested { api, .. } => {
+            // Keep the event loop running even if all windows are closed
+            // This allow us to catch system tray events when there is no window
             api.prevent_exit();
         },
         _ => {}
@@ -124,7 +128,6 @@ fn get_menu() -> Menu {
             .add_native_item(MenuItem::Redo)
             .add_native_item(MenuItem::SelectAll)
     );
-    let viewmenu = Submenu::new("View", Menu::new().add_native_item(MenuItem::ShowAll));
     let about_menu = Submenu::new("Help",
         Menu::new()
             .add_item(CustomMenuItem::new("about".to_string(), "About"))
@@ -133,6 +136,5 @@ fn get_menu() -> Menu {
     Menu::new()
         .add_submenu(filemenu)
         .add_submenu(editmenu)
-        .add_submenu(viewmenu)
         .add_submenu(about_menu)
 }
