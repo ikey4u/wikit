@@ -1,5 +1,6 @@
 pub use anyhow::{Context, Result as AnyResult};
 use nom::{error::{ErrorKind, FromExternalError, ParseError}};
+use thiserror;
 
 #[macro_export]
 macro_rules! elog {
@@ -11,9 +12,30 @@ macro_rules! elog {
     };
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum WikitError {
-    Anyhow(anyhow::Error),
+    #[error("plain error: {0}")]
+    Plain(String),
+
+    #[error("oops, error happens: {0}")]
+    Anyhow(#[from] anyhow::Error),
+
+    #[error("IO error")]
+    IOError(#[from] std::io::Error),
+
+    #[error("TOML error")]
+    TOMLError(#[from] toml::de::Error),
+
+    #[error("FST error")]
+    FSTError(#[from] fst::Error),
+}
+
+pub type WikitResult<T> = std::result::Result<T, WikitError>;
+
+impl WikitError {
+    pub fn new<S>(msg: S) -> Self where S: AsRef<str> {
+        WikitError::Plain(msg.as_ref().to_string())
+    }
 }
 
 impl<I> ParseError<I> for WikitError {

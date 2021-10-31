@@ -5,3 +5,5 @@ pub mod mdict;
 pub mod reader;
 pub mod util;
 pub mod router;
+pub mod index;
+pub mod wikit;

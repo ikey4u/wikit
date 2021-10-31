@@ -3,7 +3,8 @@ use crate::error::{AnyResult, Context};
 
 use std::process::Command;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::io::{Error, ErrorKind};
 
 struct ArgParser<'a> {
     buf: &'a str,
@@ -116,6 +117,31 @@ pub fn parse_path(filepath: &str) -> AnyResult<(PathBuf, String, String)> {
     Ok((parentdir.to_path_buf(), stem.to_string(), suffix.to_string()))
 }
 
+pub fn filter_file_by_suffix<P>(path: P, suffix: &str) -> Option<Vec<PathBuf>> where P: AsRef<Path> {
+    let path = path.as_ref();
+    let list = path.read_dir().and_then(|files| {
+        let list = files
+            .filter_map(|d| -> Option<PathBuf> {
+                if let Ok(entry) = d {
+                    let entpath = entry.path();
+                    if let Some(ext) = entpath.extension() {
+                        if ext == suffix {
+                            return Some(entpath);
+                        }
+                    }
+                }
+                return None;
+            })
+            .collect::<Vec<PathBuf>>();
+        if list.len() > 0 {
+            Ok(list)
+        } else {
+            Err(Error::new(ErrorKind::NotFound, ""))
+        }
+    });
+    list.ok()
+}
+
 #[test]
 fn test_argparser() {
     let cmd = "a bc def";
@@ -142,7 +168,7 @@ fn test_argparser() {
 }
 
 #[test]
-fn debug() {
+fn parse_path_test() {
     let p = parse_path("test/demo.txt");
     if let Ok(p) = p {
         assert_eq!(p.1.as_str(), "demo");
