@@ -28,9 +28,16 @@ pub enum WikitError {
 
     #[error("FST error")]
     FSTError(#[from] fst::Error),
+
+    #[error("UTF8 error")]
+    UTF8Error(#[from] std::string::FromUtf8Error),
+
+    #[error("FSTLevenshteinError error")]
+    FSTLevenshteinError(#[from] fst::automaton::LevenshteinError),
 }
 
 pub type WikitResult<T> = std::result::Result<T, WikitError>;
+pub type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 
 impl WikitError {
     pub fn new<S>(msg: S) -> Self where S: AsRef<str> {

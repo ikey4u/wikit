@@ -1,5 +1,5 @@
 use crate::elog;
-use crate::error::{Context, AnyResult, WikitError};
+use crate::error::{Context, AnyResult, NomResult};
 use crate::reader::MDXSource;
 use crate::config::MAX_MDX_ITEM_SIZE;
 
@@ -18,8 +18,6 @@ use ripemd128::{Ripemd128, Digest};
 use encoding_rs::GB18030;
 use chrono::{DateTime, Local};
 use indicatif::ProgressBar;
-
-type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
 
 #[derive(PartialEq)]
 pub enum ParseOption {
