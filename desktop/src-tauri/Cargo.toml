@@ -20,6 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { git = "https://github.com/tauri-apps/tauri/", rev = "651fc01492f74cc0dafba20b2fcbbb7a3a3f05e1", features = ["api-all"] }
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 wikit-core = { path = "../../core" }
+once_cell = "1.8.0"
 
 [features]
 default = [ "custom-protocol" ]

@@ -58,7 +58,12 @@ impl FSTIndex {
         let mmap = unsafe { MmapOptions::new().offset(self.offset).len(self.length as usize).map(&file)? };
         let map = Map::new(mmap)?;
 
-        let query = Levenshtein::new(keyword.as_ref(), 2)?;
+        let fuzzycnt = match keyword.as_ref().len() {
+            0 | 1 | 2 => 0,
+            3 | 4 | 5 => 1,
+            _ => 2,
+        };
+        let query = Levenshtein::new(keyword.as_ref(), fuzzycnt)?;
         let mut stream = map.search(&query).into_stream();
 
         let mut r = vec![];

@@ -4,6 +4,7 @@ use crate::elog;
 use std::fs::{self, File};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::io::{Write};
 
 use dirs;
 use ron::de::from_reader;
@@ -18,19 +19,47 @@ pub const WIKIT_DEFAULT_CONFIG: &str = r#"
     dict: {
         "dictionary_oxford": "dictionary_oxford_table",
         "dictionary_collins": "dictionary_collins_table",
-    }
+    },
+    // local contains a list of absolute path (directory or wikit dictionary path)
+    local: [
+        "",
+    ],
+    // server contains a list of dictionary server API
+    server: [
+        (
+            name: "",
+            api: "",
+        )
+    ],
 )
 "#;
+
+#[derive(Debug, Deserialize)]
+pub struct WikitServer {
+    name: String,
+    api: String,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct WikitConfig {
     pub dburl: String,
     pub dict: HashMap<String, String>,
+    pub server: Vec<WikitServer>,
+    pub local: Vec<String>,
 }
 
 pub fn load_config() -> AnyResult<WikitConfig> {
     let confdir = get_config_dir().context(elog!("cannot get user config directory"))?;
-    let confpath = confdir.join("wikit").join("wikit.ron");
+    if !confdir.exists() {
+        fs::create_dir_all(&confdir).context(elog!("failed to create {}", confdir.display()))?;
+    }
+    let confpath = confdir.join("wikit.ron");
+    if !confpath.exists() {
+        File::create(&confpath)
+            .context(elog!("failed to create wikit.ron"))?
+            .write(WIKIT_DEFAULT_CONFIG.as_bytes())
+            .context(elog!("failed to write wikit.ron"))?;
+    }
     let f = File::open(&confpath)
         .context(
             elog!(
@@ -43,6 +72,7 @@ pub fn load_config() -> AnyResult<WikitConfig> {
     Ok(wikit_config)
 }
 
+// TODO(2021-11-01): depracated, to be refactored out
 pub fn init_config_dir() -> AnyResult<()> {
     let confdir = get_config_dir().context(elog!("cannot get user config directory"))?;
     let confdir = confdir.as_path();

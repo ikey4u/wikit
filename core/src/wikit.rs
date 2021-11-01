@@ -86,9 +86,7 @@ impl<'a> DataEntry<'a> {
 }
 
 #[derive(Debug, Clone)]
-struct WikitHead {
-    // format version of wikit dictionary
-    // pub version: u32,
+pub struct WikitHead {
     // dictionary standard name
     pub name: String,
     // detail description of dictionary
@@ -147,7 +145,7 @@ impl WikitHead {
     }
 }
 
-struct WikitDictionary {
+pub struct WikitDictionary {
     pub head: WikitHead,
     // local path of dictionary
     path: PathBuf,

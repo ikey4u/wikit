@@ -4,51 +4,59 @@
 )]
 
 use std::io::Read;
+use std::{sync::Mutex, collections::HashMap};
+use std::path::Path;
+use std::sync::Arc;
 
+use wikit_core::config;
+use wikit_core::wikit::WikitDictionary;
 use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, Event, Manager};
 use tauri::api::dialog;
+use once_cell::sync::Lazy;
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct Dictionary {
-    // standard name
-    stdname: String,
-    // human readable name
-    name: String,
-    // abbreviation name
-    abbr: String,
-    // dictionary path
-    path: String,
-    csspath: String,
-    jspath: String,
-}
+static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(|| {
+    Arc::new(Mutex::new(HashMap::new()))
+});
 
 #[tauri::command]
-fn lookup(dict: Dictionary, word: String) -> String {
-    let mut meaning = String::new();
-    if dict.path.starts_with("http://") || dict.path.starts_with("https://") {
-        let url = format!("{}/dict/q?word={}&dictname={}", dict.path, word, dict.stdname);
-        let mut resp = reqwest::blocking::get(url).unwrap();
-        resp.read_to_string(&mut meaning);
-    } else {
-        meaning.push_str("local dictionary is not unsupported for now");
+fn lookup(dictpath: String, word: String) -> HashMap<String, String> {
+    let mut mp = HashMap::new();
+    let dictdb = DICTDB.lock().unwrap();
+    if let Some(dict) = dictdb.get(&dictpath) {
+        if let Ok(v) = dict.lookup(word) {
+            for (k, v) in v {
+                mp.insert(k, v);
+            }
+        }
     }
-    meaning
+    mp
 }
 
 #[tauri::command]
-fn get_dict_list() -> Vec<Dictionary> {
-    // fixed for test, will be changed once development done
-    let srv = "http://106.53.152.194";
-    vec![
-        Dictionary {
-            stdname: "en_en_oxford_advanced".into(),
-            name: "Oxford Advanced Learner Dictionary".into(),
-            abbr: "OALD".into(),
-            path: srv.to_string(),
-            jspath: format!("{}/{}", srv, "/wikit/static/en_en_oxford_advanced.js"),
-            csspath: format!("{}/{}", srv, "/wikit/static/en_en_oxford_advanced.css"),
-        },
-    ]
+fn get_dict_list() -> Vec<String> {
+    let wikit_config = config::load_config().unwrap();
+    let mut dictdb = DICTDB.lock().unwrap();
+    for local_dict in wikit_config.local {
+        let local_dict = local_dict.trim();
+        if (local_dict.len() <= 0) || dictdb.contains_key(local_dict) {
+            continue;
+        }
+        match WikitDictionary::load(Path::new(local_dict)) {
+            Ok(dict) => {
+                dictdb.insert(local_dict.to_string(), dict);
+            },
+            Err(e) => {
+                println!("failed to load dictionary [{}] with error {:?}", local_dict, e);
+            },
+        }
+    }
+
+    let mut dictlist = vec![];
+    for (k, _) in dictdb.iter() {
+        dictlist.push(k.to_string());
+    }
+
+    dictlist
 }
 
 fn main() {
