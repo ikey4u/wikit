@@ -59,7 +59,6 @@ impl WikitSourceType {
 pub struct WikitSourceConf {
     name: String,
     desc: String,
-    output: String,
     source: String,
 }
 
@@ -156,11 +155,17 @@ impl WikitDictionary {
     /// Create wikit dictionary from specific dictionary
     ///
     /// `path` should be a directory and contains a `wikit.toml` configuration file, see
-    /// [WikitSourceConf] for more details.
-    pub fn new_from<P>(path: P) -> WikitResult<bool> where P: AsRef<Path> {
+    /// [WikitSourceConf] for more details. `outfile` is optional, if it is none, then the output
+    /// file will be put under `path` directory and named as `name` value in `wikit.toml`.
+    pub fn create<P, Q>(path: P, outfile: Option<Q>) -> WikitResult<PathBuf>
+    where
+        P: AsRef<Path>,
+        Q: AsRef<Path>
+    {
         let path = path.as_ref();
 
-        let mut dict_conf_file = File::open(path.join("wikit.toml"))?;
+        let mut dict_conf_file = File::open(path.join("wikit.toml"))
+            .context(elog!("failed to open wikit.toml file in {}", path.display()))?;
         let mut dict_conf = String::new();
         dict_conf_file.read_to_string(&mut dict_conf)?;
         let dict_conf = toml::from_str::<WikitSourceConf>(&dict_conf)?;
@@ -183,7 +188,15 @@ impl WikitDictionary {
         //      dbase:8
         //      dsz:8
         //
-        let outfile = path.join(dict_conf.name.clone() + ".wikit");
+        let outfile = if let Some(outfile) = outfile {
+            let outfile = outfile.as_ref();
+            if outfile.exists() && outfile.is_dir() {
+                return Err(WikitError::new("output path must be a file but got directory"));
+            }
+            outfile.to_path_buf()
+        } else {
+            path.join(dict_conf.name.clone() + ".wikit")
+        };
         let mut writer = BufWriter::new(File::create(&outfile)?);
         // magic
         writer.write(WIKIT_MAGIC.as_bytes())?;
@@ -263,7 +276,7 @@ impl WikitDictionary {
             }
         }
 
-        Ok(true)
+        Ok(outfile)
     }
 
     pub fn load<P>(path: P) -> WikitResult<Self> where P: AsRef<Path> {

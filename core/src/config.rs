@@ -72,16 +72,6 @@ pub fn load_config() -> AnyResult<WikitConfig> {
     Ok(wikit_config)
 }
 
-// TODO(2021-11-01): depracated, to be refactored out
-pub fn init_config_dir() -> AnyResult<()> {
-    let confdir = get_config_dir().context(elog!("cannot get user config directory"))?;
-    let confdir = confdir.as_path();
-    if !confdir.exists() {
-        fs::create_dir_all(confdir).context(elog!("failed to create {}", confdir.display()))?;
-    }
-    Ok(())
-}
-
 pub fn get_config_dir() -> AnyResult<PathBuf> {
     let sysconfdir = dirs::config_dir().context(elog!("cannot get system config directory"))?;
     let confdir = sysconfdir.join("wikit");

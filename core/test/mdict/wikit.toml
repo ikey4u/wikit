@@ -14,8 +14,5 @@ they were passed on to be keyed into the slowly assembled dictionary database wh
 completed for the typesetting of the first edition.
 '''
 
-# generated wikit dictionary name without suffix
-output = "柯林斯双解"
-
 # valid values are WIKIT or MDICT
 source = "MDICT"

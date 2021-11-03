@@ -1,10 +1,10 @@
 use wikit_core::mdict;
-use wikit_core::config;
 use wikit_core::router;
 use wikit_core::mac;
 use wikit_core::reader;
 use wikit_core::util;
 use wikit_core::elog;
+use wikit_core::wikit;
 use wikit_core::error::{AnyResult, Context};
 
 use std::path::Path;
@@ -68,12 +68,10 @@ impl ResourceFormat {
 
 #[rocket::main]
 async fn main() -> AnyResult<()> {
-    config::init_config_dir().context(elog!("cannot init wikit config directory"))?;
-
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
-        .version("0.2.2")
+        .version("0.2.3")
         .author("ikey4u <pwnkeeper@gmail.com>")
         .about("A universal dictionary - Wikit")
         .subcommand(
@@ -119,7 +117,7 @@ async fn main() -> AnyResult<()> {
                 .takes_value(true)
             )
             .arg(Arg::with_name("input")
-                .help("The input file format depends on the value. File suffix reflects the format: .txt => text, .mdx => mdx. If the value is a database url such as postgresql://user@localhost:5432/dictdb, then the input is a database")
+                .help("The input file format depends on the value. File suffix reflects the format, for example .txt => text, .mdx => mdx, .wikit => wikit, .dictionary => macos dictionary. If the value is a database url such as postgresql://user@localhost:5432/dictdb, then the input is a database")
                 .required(true)
                 .index(1)
             )
@@ -169,6 +167,8 @@ async fn main() -> AnyResult<()> {
                         from_reader(metafile).context("Failed to deserialize meat file")?
                     }
                 };
+                let (pdir, stem, _suffix) = util::parse_path(input.as_str())
+                    .context(elog!("failed to get path of input file: {}", input))?;
                 match (itype, otype) {
                     (ResourceFormat::TEXT, ResourceFormat::MDX) => {
                         mdict::create_mdx(&meta.title, &meta.author, &meta.description, &input, &output)?;
@@ -184,8 +184,6 @@ async fn main() -> AnyResult<()> {
                             .context(elog!("Failed to create mac dictionary"))?;
                     },
                     (ResourceFormat::MDX, ResourceFormat::MACDICT) => {
-                        let (pdir, stem, _suffix) = util::parse_path(input.as_str())
-                            .context(elog!("failed to get path of input file: {}", input))?;
                         let textpath = pdir.join(stem + "_wikit.txt");
                         if !textpath.exists() {
                             let dict = mdict::parse_mdx(input.as_str(), None)?;
@@ -213,6 +211,12 @@ async fn main() -> AnyResult<()> {
                         let pairs = mdict::parse_mdx(input.as_str(), None)?;
                         mdict::save_into_db(pairs, &output, table).await?;
                     }
+                    (ResourceFormat::MDX, ResourceFormat::WIKIT) => {
+                        let outfile = Path::new(&output);
+                        let outfile = wikit::WikitDictionary::create(&pdir, Some(outfile))
+                            .context(elog!("failed to crate wikit dictionary"))?;
+                        println!("The wikit dictionary can be found at {}", outfile.display());
+                    },
                     (i, o) => {
                         return Err(elog!("Does not support creating {:?} from {:?} for now", o, i));
                     },

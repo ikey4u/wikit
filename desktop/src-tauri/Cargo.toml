@@ -1,11 +1,11 @@
 [package]
-name = "WikitDesktop"
+name = "wikit-desktop"
 version = "0.1.0"
 description = "Wikit Desktop - A universal dictionary for human"
 authors = ["ikey4u <pwnkeeper@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/ikey4u/wikit"
-default-run = "WikitDesktop"
+default-run = "wikit-desktop"
 edition = "2021"
 build = "src/build.rs"
 

@@ -3,7 +3,6 @@
   windows_subsystem = "windows"
 )]
 
-use std::io::Read;
 use std::{sync::Mutex, collections::HashMap};
 use std::path::Path;
 use std::sync::Arc;
