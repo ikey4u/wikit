@@ -212,9 +212,9 @@ async fn main() -> AnyResult<()> {
                         let pairs = mdict::parse_mdx(input.as_str(), None)?;
                         mdict::save_into_db(pairs, &output, table).await?;
                     }
-                    (ResourceFormat::MDX, ResourceFormat::WIKIT) => {
+                    (ResourceFormat::MDX | ResourceFormat::TEXT, ResourceFormat::WIKIT) => {
                         let outfile = Path::new(&output);
-                        let outfile = wikit::WikitDictionary::create_from_mdx(&input, Some(outfile))
+                        let outfile = wikit::WikitDictionary::create(&input, Some(outfile))
                             .context(elog!("failed to create wikit dictionary"))?;
                         println!("The wikit dictionary can be found at {}", outfile.display());
                     },

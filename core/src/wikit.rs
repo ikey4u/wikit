@@ -5,6 +5,7 @@ use crate::elog;
 use crate::index;
 use crate::mdict;
 use crate::util;
+use crate::reader;
 
 use std::path::{Path, PathBuf};
 use std::fs::File;
@@ -41,17 +42,6 @@ pub enum WikitSourceType {
     /// directory and if it exists, it should contain optional `img`, `video`, `audio` subdirectory)
     /// . The `x` is the dictionary name.
     Wikit,
-}
-
-impl WikitSourceType {
-    pub fn new<P>(text: P) -> Option<Self> where P: AsRef<str> {
-        let text = text.as_ref();
-        match text {
-            "WIKIT" => Some(WikitSourceType::Wikit),
-            "MDICT" => Some(WikitSourceType::Mdict),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -211,10 +201,11 @@ pub struct WikitDictionary {
 ///      index: isz
 ///
 impl WikitDictionary {
-    /// Create wikit dictionary from mdx file
+    /// Create wikit dictionary from wikit source file
     ///
-    /// `mdxpath` is absolute path to mdx file such as `/some/dir/dict.mdx`, `outfile` is
-    /// optional, if it is none, then the output file will be `/some/dir/dict.wikit`.
+    /// `srcfile` is absolute path to wikit source file (txt or mdx) such as `/some/dir/dict.mdx`
+    /// or `/some/dir/dict.txt`, `outfile` is optional, if it is none, then the output file will be
+    /// `/some/dir/dict.wikit`.
     ///
     /// Moreover, you may want to provide the following files to decorate your dictionary
     ///
@@ -230,18 +221,14 @@ impl WikitDictionary {
     ///
     ///         You can config your dictionary information in this file. See
     ///         [WikitDictConf] for more details.
-    pub fn create_from_mdx<P, Q>(mdxpath: P, outfile: Option<Q>) -> WikitResult<PathBuf>
+    pub fn create<P, Q>(srcfile: P, outfile: Option<Q>) -> WikitResult<PathBuf>
     where
         P: AsRef<Path>,
         Q: AsRef<Path>
     {
-        let mdxpath = mdxpath.as_ref();
-        let (pdir, stem, suffix) = util::parse_path(mdxpath)
-            .context(elog!("failed to get parent directory of {}", mdxpath.display()))?;
-
-        if suffix != "mdx" {
-            println!("[!] the suffix of {} is not mdx, is the fileformat wrong?", mdxpath.display());
-        }
+        let srcfile = srcfile.as_ref();
+        let (pdir, stem, suffix) = util::parse_path(srcfile)
+            .context(elog!("failed to get parent directory of {}", srcfile.display()))?;
 
         let mut script = String::new();
         if let Ok(mut f) = File::open(pdir.join(stem.clone() + ".js")) {
@@ -317,8 +304,19 @@ impl WikitDictionary {
         writer.write(&hdrsz.to_be_bytes()[..])?;
         writer.seek(SeekFrom::Start(hdrsz as u64))?;
 
-        let mdx_path_str = &format!("{}", mdxpath.display());
-        let mut word_meaning_list = mdict::parse_mdx(mdx_path_str, None)?;
+        let srcfile_path_str = &format!("{}", srcfile.display());
+        let mut word_meaning_list = match suffix.to_lowercase().as_str() {
+            "mdx" => {
+                mdict::parse_mdx(srcfile_path_str, None)?
+            },
+            "txt" => {
+                let f = File::open(srcfile_path_str).context(elog!("failed to open {}", srcfile_path_str))?;
+                reader::MDXSource::new(f).collect::<Vec<(String, String)>>()
+            }
+            _ => {
+                return Err(WikitError::new(format!("source type {} is not supported", srcfile.display())));
+            }
+        };
         // sort word by ascending
         word_meaning_list.sort_by(|a, b| a.0.cmp(&b.0));
         // remove duplicate word
