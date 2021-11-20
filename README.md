@@ -23,7 +23,17 @@ So what are planned to be included? The goal of this project is to make
 
 - DESKTOP APPLICATION
 
-    It is developed based on [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/), working in progress.
+    It is developed based on [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/).
+
+    The first version is almost finished but not released yet, and here are some snapshots
+
+    - the main ui
+
+        ![main ui](./docs/imgs/main.jpg "main ui")
+
+    - the lookup ui
+
+        ![lookup ui](./docs/imgs/lookup.jpg "lookup ui")
 
 - DICTIONARY SERVER
 

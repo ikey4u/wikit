@@ -17,9 +17,28 @@ static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(||
     Arc::new(Mutex::new(HashMap::new()))
 });
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct LookupResponse {
+    // possible of (word, meaning) pair list
+    words: HashMap<String, String>,
+    script: String,
+    style: String,
+}
+
+impl LookupResponse {
+    fn new(words: HashMap<String, String>, script: String, style: String) -> Self {
+        LookupResponse {
+            words,
+            script,
+            style,
+        }
+    }
+}
+
 #[tauri::command]
-fn lookup(dictpath: String, word: String) -> HashMap<String, String> {
-    let mut mp = HashMap::new();
+fn lookup(dictpath: String, word: String) -> LookupResponse {
+    let (mut mp, mut script, mut style) = (HashMap::new(), String::new(), String::new());
+
     let dictdb = DICTDB.lock().unwrap();
     if let Some(dict) = dictdb.get(&dictpath) {
         if let Ok(v) = dict.lookup(word) {
@@ -27,8 +46,10 @@ fn lookup(dictpath: String, word: String) -> HashMap<String, String> {
                 mp.insert(k, v);
             }
         }
+        script.push_str(dict.get_script());
+        style.push_str(dict.get_style());
     }
-    mp
+    LookupResponse::new(mp, script, style)
 }
 
 #[tauri::command]
@@ -99,13 +120,13 @@ fn main() {
             api.prevent_close();
             dialog::ask(
                 Some(&window),
-                "Wikit App",
-                "Are you sure that you want to close this window?",
+                "Wikit Desktop",
+                "Are you sure that you want to exit wikit desktop?",
                 move |answer| {
                     if answer {
                         // .close() cannot be called on the main thread
                         std::thread::spawn(move || {
-                            app_handle.get_window(&label).unwrap().close().unwrap();
+                            std::process::exit(0);
                         });
                     }
                 },

@@ -146,6 +146,8 @@ impl<'a> MdxPacket<'a> {
     }
 }
 
+// parse_mdx will parse mdx file into list of (word, meaning) pair, all words are space trimed and
+// converted into lowercase.
 pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(String, String)>> {
     let mut buf = Vec::new();
     File::open(mdxpath).context(elog!("failed to open {}", mdxpath))?
@@ -492,7 +494,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                 &meanings[start..end],
                 mdxinfo.encoding
             ))?;
-        word_meaning_list.push((word, meaning));
+        word_meaning_list.push((word.trim().to_lowercase(), meaning));
     }
     bar.finish_with_message("Parsing MDX is done!");
 

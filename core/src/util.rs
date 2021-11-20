@@ -102,9 +102,10 @@ pub fn runcmd(cmd: &str, envs: Option<Vec<(String, String)>>) -> AnyResult<Strin
 }
 
 /// parse_path returns a three-element tuple which is `(parentdir, stem, suffix)`
-pub fn parse_path(filepath: &str) -> AnyResult<(PathBuf, String, String)> {
+pub fn parse_path<P>(filepath: P) -> AnyResult<(PathBuf, String, String)> where P: AsRef<Path> {
+    let filepath = filepath.as_ref();
     let stdpath = std::fs::canonicalize(filepath)
-        .context(elog!("filepath [{}] is not exist", filepath))?;
+        .context(elog!("filepath [{}] is not exist", filepath.display()))?;
     let parentdir = stdpath.parent()
         .context(elog!("cannot get parent directory of {}", stdpath.display()))?;
     let stem = stdpath.file_stem()

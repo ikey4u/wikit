@@ -4,6 +4,7 @@ use crate::error::{WikitError, Context, WikitResult, AnyResult, NomResult};
 use crate::elog;
 use crate::index;
 use crate::mdict;
+use crate::util;
 
 use std::path::{Path, PathBuf};
 use std::fs::File;
@@ -11,7 +12,7 @@ use std::io::{BufWriter, Write, Seek, SeekFrom, Read};
 
 use serde::{Deserialize, Serialize};
 use nom::{do_parse, map_res, take};
-use nom::number::streaming::{be_u16, be_u64};
+use nom::number::streaming::{be_u16, be_u32, be_u64};
 
 // `516` is the birthday of wikit project (the first commit date 2021-05-16)
 const WIKIT_MAGIC: &'static str = "WIKIT516";
@@ -21,16 +22,14 @@ const LATEST_WIKIT_FMT_VERSION: u32 = 0x00_00_00_01;
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
 pub enum DataEntryType {
-    Word = 0x1,
-    Meaning = 0x2,
-    CSS = 0x3,
-    JS = 0x4,
-    SVG = 0x5,
-    PNG = 0x6,
-    JPG = 0x7,
-    MP3 = 0x8,
-    WAV = 0x9,
-    MP4 = 0xa,
+    TXT = 0x1,
+    SVG = 0x2,
+    PNG = 0x3,
+    JPG = 0x4,
+    MP3 = 0x5,
+    WAV = 0x6,
+    // Do we really need this?
+    MP4 = 0x7,
 }
 
 #[derive(Debug)]
@@ -40,7 +39,7 @@ pub enum WikitSourceType {
     Mdict,
     /// This type dictionary should contain `x.txt` (must have), `x.media` (it is an optional
     /// directory and if it exists, it should contain optional `img`, `video`, `audio` subdirectory)
-    /// .  The `x` is the dictionary name.
+    /// . The `x` is the dictionary name.
     Wikit,
 }
 
@@ -56,10 +55,23 @@ impl WikitSourceType {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WikitSourceConf {
+pub struct WikitDictConf {
     name: String,
     desc: String,
-    source: String,
+    author: String,
+}
+
+impl WikitDictConf {
+    fn new<S>(name: S, desc: S, author: S) -> Self
+    where
+        S: AsRef<str>,
+    {
+        WikitDictConf {
+            name: name.as_ref().to_string(),
+            desc: desc.as_ref().to_string(),
+            author: author.as_ref().to_string(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -100,6 +112,10 @@ pub struct WikitHead {
     pub dbase: u64,
     // data size, data is essential a vector of DataEntry
     pub dsz: u64,
+    // javascript script
+    pub script: String,
+    // css style
+    pub style: String,
 }
 
 impl WikitHead {
@@ -128,6 +144,20 @@ impl WikitHead {
             isz: be_u64 >>
             dbase: be_u64 >>
             dsz: be_u64 >>
+            scriptsz: be_u32 >>
+            script: map_res!(take!(scriptsz),
+                |x: &[u8]| -> AnyResult<String> {
+                    let script = String::from_utf8(x.to_vec()).context(elog!("cannot get script"))?;
+                    Ok(script)
+                }
+            ) >>
+            stylesz: be_u32 >>
+            style: map_res!(take!(stylesz),
+                |x: &[u8]| -> AnyResult<String> {
+                    let style = String::from_utf8(x.to_vec()).context(elog!("cannot get style"))?;
+                    Ok(style)
+                }
+            ) >>
             (
                 WikitHead {
                     name,
@@ -137,6 +167,8 @@ impl WikitHead {
                     isz,
                     dbase,
                     dsz,
+                    script,
+                    style,
                 }
             )
         );
@@ -151,43 +183,86 @@ pub struct WikitDictionary {
     idx: index::FSTIndex,
 }
 
+/// WikitDictionary represents a wikit dictionary.
+///
+/// wikit dictionary starts_with with `magic` and `version` fields
+///
+///      magic:8
+///      version:4
+///
+/// if version is 0x01, then the follwoing layout is
+///
+///      hdrsz:2
+///      namesz:2
+///      name:namesz
+///      descsz:2
+///      desc:descsz
+///      ifmt:1
+///      ibase:8
+///      isz:8
+///      dbase:8
+///      dsz:8
+///      scriptsz: 4
+///      script: scriptsz
+///      stylesz: 4
+///      style: stylesz
+///
+///      data: dsz
+///      index: isz
+///
 impl WikitDictionary {
-    /// Create wikit dictionary from specific dictionary
+    /// Create wikit dictionary from mdx file
     ///
-    /// `path` should be a directory and contains a `wikit.toml` configuration file, see
-    /// [WikitSourceConf] for more details. `outfile` is optional, if it is none, then the output
-    /// file will be put under `path` directory and named as `name` value in `wikit.toml`.
-    pub fn create<P, Q>(path: P, outfile: Option<Q>) -> WikitResult<PathBuf>
+    /// `mdxpath` is absolute path to mdx file such as `/some/dir/dict.mdx`, `outfile` is
+    /// optional, if it is none, then the output file will be `/some/dir/dict.wikit`.
+    ///
+    /// Moreover, you may want to provide the following files to decorate your dictionary
+    ///
+    ///     - /some/dir/dict.js
+    ///
+    ///         Javascript file for your dictionary
+    ///
+    ///     - /some/dir/dict.css
+    ///
+    ///         CSS file for your dictionary
+    ///
+    ///     - /some/dir/dict.toml
+    ///
+    ///         You can config your dictionary information in this file. See
+    ///         [WikitDictConf] for more details.
+    pub fn create_from_mdx<P, Q>(mdxpath: P, outfile: Option<Q>) -> WikitResult<PathBuf>
     where
         P: AsRef<Path>,
         Q: AsRef<Path>
     {
-        let path = path.as_ref();
+        let mdxpath = mdxpath.as_ref();
+        let (pdir, stem, suffix) = util::parse_path(mdxpath)
+            .context(elog!("failed to get parent directory of {}", mdxpath.display()))?;
 
-        let mut dict_conf_file = File::open(path.join("wikit.toml"))
-            .context(elog!("failed to open wikit.toml file in {}", path.display()))?;
-        let mut dict_conf = String::new();
-        dict_conf_file.read_to_string(&mut dict_conf)?;
-        let dict_conf = toml::from_str::<WikitSourceConf>(&dict_conf)?;
+        if suffix != "mdx" {
+            println!("[!] the suffix of {} is not mdx, is the fileformat wrong?", mdxpath.display());
+        }
 
-        // wikit dictionary starts_with with `magic` and `version` fields
-        //
-        //      magic:8
-        //      version:4
-        //
-        // if version is 0x01, then the follwoing layout is
-        //
-        //      hdrsz:2
-        //      namesz:2
-        //      name:namesz
-        //      descsz:2
-        //      desc:descsz
-        //      ifmt:1
-        //      ibase:8
-        //      isz:8
-        //      dbase:8
-        //      dsz:8
-        //
+        let mut script = String::new();
+        if let Ok(mut f) = File::open(pdir.join(stem.clone() + ".js")) {
+            f.read_to_string(&mut script)?;
+        }
+
+        let mut style = String::new();
+        if let Ok(mut f) = File::open(pdir.join(stem.clone() + ".css")) {
+            f.read_to_string(&mut style)?;
+        }
+
+        let mut conf = String::new();
+        if let Ok(mut f) = File::open(pdir.join(stem.clone() + ".toml")) {
+            f.read_to_string(&mut conf)?;
+        };
+        let conf = toml::from_str::<WikitDictConf>(&conf).unwrap_or(WikitDictConf::new(
+            stem.as_str(),
+            "this dictionary has no description",
+            "anonymous"
+        ));
+
         let outfile = if let Some(outfile) = outfile {
             let outfile = outfile.as_ref();
             if outfile.exists() && outfile.is_dir() {
@@ -195,8 +270,9 @@ impl WikitDictionary {
             }
             outfile.to_path_buf()
         } else {
-            path.join(dict_conf.name.clone() + ".wikit")
+            pdir.join(conf.name.clone() + ".wikit")
         };
+
         let mut writer = BufWriter::new(File::create(&outfile)?);
         // magic
         writer.write(WIKIT_MAGIC.as_bytes())?;
@@ -205,13 +281,13 @@ impl WikitDictionary {
         let hdrsz_pos = writer.seek(SeekFrom::Current(0))?;
         writer.seek(SeekFrom::Current(2))?;
         // namesz and name
-        let namesz = dict_conf.name.len() as u16;
+        let namesz = conf.name.len() as u16;
         writer.write(&namesz.to_be_bytes()[..])?;
-        writer.write(&dict_conf.name.as_bytes()[..])?;
+        writer.write(&conf.name.as_bytes()[..])?;
         // descsz and desc
-        let descsz = dict_conf.desc.len() as u16;
+        let descsz = conf.desc.len() as u16;
         writer.write(&descsz.to_be_bytes()[..])?;
-        writer.write(&dict_conf.desc.as_bytes()[..])?;
+        writer.write(&conf.desc.as_bytes()[..])?;
         // ifmt
         writer.write(&[index::IndexFormat::FST as u8])?;
         // ibase
@@ -226,6 +302,14 @@ impl WikitDictionary {
         // dsz
         let dsz_pos = writer.seek(SeekFrom::Current(0))?;
         writer.seek(SeekFrom::Current(8))?;
+        // scriptsz and script
+        let scriptsz = script.len() as u32;
+        writer.write(&scriptsz.to_be_bytes()[..])?;
+        writer.write(&script.as_bytes()[..])?;
+        // stylesz and style
+        let stylesz = style.len() as u32;
+        writer.write(&stylesz.to_be_bytes()[..])?;
+        writer.write(&style.as_bytes()[..])?;
 
         // save header size
         let hdrsz = writer.seek(SeekFrom::Current(0))? as u16;
@@ -233,48 +317,36 @@ impl WikitDictionary {
         writer.write(&hdrsz.to_be_bytes()[..])?;
         writer.seek(SeekFrom::Start(hdrsz as u64))?;
 
-        match WikitSourceType::new(dict_conf.source) {
-            Some(WikitSourceType::Mdict) => {
-                let mdxpath = path.join(dict_conf.name.clone() + ".mdx");
-                let _mddpath = path.join(dict_conf.name.clone() + ".mdd");
-                let mdx_path_str = &format!("{}", mdxpath.display());
-                let mut word_meaning_list = mdict::parse_mdx(mdx_path_str, None)?;
-                // sort word by ascending
-                word_meaning_list.sort_by(|a, b| a.0.cmp(&b.0));
-                // remove duplicate word
-                word_meaning_list.dedup_by(|a, b| a.0.eq(&b.0));
+        let mdx_path_str = &format!("{}", mdxpath.display());
+        let mut word_meaning_list = mdict::parse_mdx(mdx_path_str, None)?;
+        // sort word by ascending
+        word_meaning_list.sort_by(|a, b| a.0.cmp(&b.0));
+        // remove duplicate word
+        word_meaning_list.dedup_by(|a, b| a.0.eq(&b.0));
 
-                let dstart = writer.seek(SeekFrom::Current(0))?;
-                let mut index_table = vec![];
-                for (word, meaning) in word_meaning_list.iter() {
-                    let entry = DataEntry::new(DataEntryType::Word, meaning.len() as u32, meaning.as_bytes());
-                    let (offset, _count) = entry.write(&mut writer)?;
-                    index_table.push((word, offset));
-                }
-                let dend = writer.seek(SeekFrom::Current(0))?;
-
-                let dbase = dstart as u64;
-                writer.seek(SeekFrom::Start(dbase_pos))?;
-                writer.write(&dbase.to_be_bytes()[..])?;
-                let dsz = (dend - dstart) as u64;
-                writer.seek(SeekFrom::Start(dsz_pos))?;
-                writer.write(&dsz.to_be_bytes()[..])?;
-
-                writer.seek(SeekFrom::Start(dend))?;
-                let (ibase, isz) = index::FSTIndex::write(&mut index_table.iter(), &mut writer)?;
-                let (ibase, isz) = (ibase as u64, isz as u64);
-                writer.seek(SeekFrom::Start(ibase_pos))?;
-                writer.write(&ibase.to_be_bytes()[..])?;
-                writer.seek(SeekFrom::Start(isz_pos))?;
-                writer.write(&isz.to_be_bytes()[..])?;
-            },
-            Some(WikitSourceType::Wikit) => {
-                todo!()
-            }
-            _ => {
-                return Err(WikitError::new("unkown source type"));
-            }
+        let dstart = writer.seek(SeekFrom::Current(0))?;
+        let mut index_table = vec![];
+        for (word, meaning) in word_meaning_list.iter() {
+            let entry = DataEntry::new(DataEntryType::TXT, meaning.len() as u32, meaning.as_bytes());
+            let (offset, _count) = entry.write(&mut writer)?;
+            index_table.push((word, offset));
         }
+        let dend = writer.seek(SeekFrom::Current(0))?;
+
+        let dbase = dstart as u64;
+        writer.seek(SeekFrom::Start(dbase_pos))?;
+        writer.write(&dbase.to_be_bytes()[..])?;
+        let dsz = (dend - dstart) as u64;
+        writer.seek(SeekFrom::Start(dsz_pos))?;
+        writer.write(&dsz.to_be_bytes()[..])?;
+
+        writer.seek(SeekFrom::Start(dend))?;
+        let (ibase, isz) = index::FSTIndex::write(&mut index_table.iter(), &mut writer)?;
+        let (ibase, isz) = (ibase as u64, isz as u64);
+        writer.seek(SeekFrom::Start(ibase_pos))?;
+        writer.write(&ibase.to_be_bytes()[..])?;
+        writer.seek(SeekFrom::Start(isz_pos))?;
+        writer.write(&isz.to_be_bytes()[..])?;
 
         Ok(outfile)
     }
@@ -335,6 +407,11 @@ impl WikitDictionary {
         return Err(WikitError::new("No such word or similar words"));
     }
 
-    pub fn unpack() {
+    pub fn get_script(&self) -> &str {
+        &self.head.script
+    }
+
+    pub fn get_style(&self) -> &str {
+        &self.head.style
     }
 }

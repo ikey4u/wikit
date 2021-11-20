@@ -106,8 +106,9 @@ async fn main() -> AnyResult<()> {
                 .long("--output")
                 .takes_value(true)
             )
+            // TODO(2021-11-20): refactor this out
             .arg(Arg::with_name("css")
-                .help("Path of the CSS file")
+                .help("Path to the CSS file")
                 .long("--css")
                 .takes_value(true)
             )
@@ -213,8 +214,8 @@ async fn main() -> AnyResult<()> {
                     }
                     (ResourceFormat::MDX, ResourceFormat::WIKIT) => {
                         let outfile = Path::new(&output);
-                        let outfile = wikit::WikitDictionary::create(&pdir, Some(outfile))
-                            .context(elog!("failed to crate wikit dictionary"))?;
+                        let outfile = wikit::WikitDictionary::create_from_mdx(&input, Some(outfile))
+                            .context(elog!("failed to create wikit dictionary"))?;
                         println!("The wikit dictionary can be found at {}", outfile.display());
                     },
                     (i, o) => {
