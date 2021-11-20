@@ -1,4 +1,5 @@
 use crate::config::MAX_MDX_ITEM_SIZE;
+use crate::util;
 
 use std::io::{BufReader, BufRead, Lines};
 use std::fs::{File};
@@ -50,6 +51,6 @@ impl Iterator for MDXSource {
             meaning
         };
         meaning.push(0 as char);
-        return Some((word, meaning));
+        return Some((util::normalize_word(word), meaning));
     }
 }

@@ -2,6 +2,7 @@ use crate::elog;
 use crate::error::{Context, AnyResult, NomResult};
 use crate::reader::MDXSource;
 use crate::config::MAX_MDX_ITEM_SIZE;
+use crate::util;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -494,7 +495,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                 &meanings[start..end],
                 mdxinfo.encoding
             ))?;
-        word_meaning_list.push((word.trim().to_lowercase(), meaning));
+        word_meaning_list.push((util::normalize_word(word), meaning));
     }
     bar.finish_with_message("Parsing MDX is done!");
 

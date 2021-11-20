@@ -143,6 +143,11 @@ pub fn filter_file_by_suffix<P>(path: P, suffix: &str) -> Option<Vec<PathBuf>> w
     list.ok()
 }
 
+pub fn normalize_word<S>(word: S) -> String where S: AsRef<str> {
+    let word = word.as_ref().trim_matches(|c: char| c.is_control() || c.is_whitespace());
+    word.to_lowercase()
+}
+
 #[test]
 fn test_argparser() {
     let cmd = "a bc def";
