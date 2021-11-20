@@ -67,6 +67,10 @@ impl FSTIndex {
         let mut stream = map.search(&query).into_stream();
 
         let mut r = vec![];
+        if let Some(v) = map.get(keyword.as_ref()) {
+            r.push((keyword.as_ref().to_string(), v));
+        }
+
         let (mut cnt, limit) = (0, 20);
         while let Some((k, v)) = stream.next() {
             r.push((String::from_utf8(k.to_vec())?, v));
