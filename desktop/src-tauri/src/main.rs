@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use wikit_core::config;
+use wikit_core::wikit;
 use wikit_core::wikit::WikitDictionary;
 use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, Event, Manager};
 use tauri::api::dialog;
@@ -36,38 +37,54 @@ impl LookupResponse {
 }
 
 #[tauri::command]
-fn lookup(dictpath: String, word: String) -> LookupResponse {
+fn lookup(dictid: String, word: String) -> LookupResponse {
     let (mut mp, mut script, mut style) = (HashMap::new(), String::new(), String::new());
 
     let dictdb = DICTDB.lock().unwrap();
-    if let Some(dict) = dictdb.get(&dictpath) {
-        if let Ok(v) = dict.lookup(word) {
-            for (k, v) in v {
-                mp.insert(k, v);
-            }
+    if let Some(dict) = dictdb.get(&dictid) {
+        match dict {
+            wikit::WikitDictionary::Local(ld) => {
+                if let Ok(v) = ld.lookup(word) {
+                    for (k, v) in v {
+                        mp.insert(k, v);
+                    }
+                }
+                script.push_str(ld.get_script());
+                style.push_str(ld.get_style());
+            },
+            wikit::WikitDictionary::Remote(rd) => {
+                if let Ok(v) = rd.lookup(&word, &dictid) {
+                    for (k, v) in v {
+                        mp.insert(k, v);
+                    }
+                }
+                script.push_str(&rd.get_script(&dictid));
+                style.push_str(&rd.get_style(&dictid));
+            },
         }
-        script.push_str(dict.get_script());
-        style.push_str(dict.get_style());
     }
     LookupResponse::new(mp, script, style)
 }
 
 #[tauri::command]
 fn get_dict_list() -> Vec<String> {
-    let wikit_config = config::load_config().unwrap();
     let mut dictdb = DICTDB.lock().unwrap();
-    for local_dict in wikit_config.local {
-        let local_dict = local_dict.trim();
-        if (local_dict.len() <= 0) || dictdb.contains_key(local_dict) {
-            continue;
-        }
-        match WikitDictionary::load(Path::new(local_dict)) {
-            Ok(dict) => {
-                dictdb.insert(local_dict.to_string(), dict);
-            },
-            Err(e) => {
-                println!("failed to load dictionary [{}] with error {:?}", local_dict, e);
-            },
+
+    if let Ok(dicts) = wikit::load_client_dictionary() {
+        for dict in dicts {
+            match dict {
+                wikit::WikitDictionary::Local(ref ld) => {
+                    let id = format!("{}", ld.path.display());
+                    dictdb.insert(id.clone(), dict);
+                },
+                wikit::WikitDictionary::Remote(ref rd) => {
+                    if let Ok(ds) = rd.get_dict_list() {
+                        for d in ds {
+                            dictdb.insert(d.id.clone(), dict.clone());
+                        }
+                    }
+                },
+            }
         }
     }
 

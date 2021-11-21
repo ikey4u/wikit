@@ -6,6 +6,7 @@ use crate::index;
 use crate::mdict;
 use crate::util;
 use crate::reader;
+use crate::config;
 
 use std::path::{Path, PathBuf};
 use std::fs::File;
@@ -19,6 +20,12 @@ use nom::number::streaming::{be_u16, be_u32, be_u64};
 const WIKIT_MAGIC: &'static str = "WIKIT516";
 // the latest wikit dictionary format version
 const LATEST_WIKIT_FMT_VERSION: u32 = 0x00_00_00_01;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DictList {
+    pub name: String,
+    pub id: String,
+}
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
@@ -86,7 +93,7 @@ impl<'a> DataEntry<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WikitHead {
     // dictionary standard name
     pub name: String,
@@ -166,14 +173,52 @@ impl WikitHead {
     }
 }
 
-pub struct WikitDictionary {
-    pub head: WikitHead,
-    // local path of dictionary
-    path: PathBuf,
-    idx: index::FSTIndex,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum WikitDictionary {
+    Local(LocalDictionary),
+    Remote(RemoteDictionary),
 }
 
-/// WikitDictionary represents a wikit dictionary.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RemoteDictionary {
+    pub url: String,
+    user: String,
+    token: String,
+}
+
+impl RemoteDictionary {
+    pub fn new(url: String, user: String, token: String) -> Self {
+        RemoteDictionary { url, user, token }
+    }
+
+    pub fn get_dict_list(&self) -> WikitResult<Vec<DictList>> {
+        let r = reqwest::blocking::get(format!("{}/wikit/list", self.url)).unwrap().json::<Vec<DictList>>().unwrap();
+        Ok(r)
+    }
+
+    pub fn lookup<P>(&self, word: P, dict: P) -> WikitResult<Vec<(String, String)>> where P: AsRef<str> {
+        let r = reqwest::blocking::get(
+            format!("{}/wikit/query?word={}&dictname={}", self.url, word.as_ref(), dict.as_ref())
+        ).unwrap().json::<Vec<(String, String)>>().unwrap();
+        Ok(r)
+    }
+
+    pub fn get_script<S>(&self, dict: S) -> String where S: AsRef<str> {
+        let r = reqwest::blocking::get(
+            format!("{}/wikit/script?dictname={}", self.url, dict.as_ref())
+        ).unwrap().text().unwrap();
+        r
+    }
+
+    pub fn get_style<S>(&self, dict: S) -> String where S: AsRef<str> {
+        let r = reqwest::blocking::get(
+            format!("{}/wikit/style?dictname={}", self.url, dict.as_ref())
+        ).unwrap().text().unwrap();
+        r
+    }
+}
+
+/// LocalDictionary represents a wikit dictionary.
 ///
 /// wikit dictionary starts_with with `magic` and `version` fields
 ///
@@ -200,7 +245,15 @@ pub struct WikitDictionary {
 ///      data: dsz
 ///      index: isz
 ///
-impl WikitDictionary {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LocalDictionary {
+    pub head: WikitHead,
+    // local path of dictionary
+    pub path: PathBuf,
+    idx: index::FSTIndex,
+}
+
+impl LocalDictionary {
     /// Create wikit dictionary from wikit source file
     ///
     /// `srcfile` is absolute path to wikit source file (txt or mdx) such as `/some/dir/dict.mdx`
@@ -377,7 +430,7 @@ impl WikitDictionary {
         }
         let wikit_head = WikitHead::new(&hdrbuf[..])?;
 
-        Ok(WikitDictionary {
+        Ok(LocalDictionary {
             head: wikit_head.clone(),
             path: path.to_path_buf(),
             idx: index::FSTIndex::new(path.to_path_buf(), wikit_head.ibase, wikit_head.isz),
@@ -412,4 +465,67 @@ impl WikitDictionary {
     pub fn get_style(&self) -> &str {
         &self.head.style
     }
+}
+
+pub fn load_dictionary_from_uri<S>(uri: S) -> Option<WikitDictionary> where S: AsRef<str> {
+    let uri = uri.as_ref();
+    if let Ok(url) = url::Url::parse(uri) {
+        match url.scheme() {
+            "file" => {
+                if let Ok(dictpath) = url.to_file_path() {
+                    if let Ok(dict) = LocalDictionary::load(dictpath) {
+                        return Some(WikitDictionary::Local(dict));
+                    }
+                }
+            },
+            "http" | "https" => {
+                let host = if let Some(host) = url.host_str() {
+                    host
+                } else {
+                    return None;
+                };
+                let port = if let Some(port) = url.port() {
+                    format!(":{}", port)
+                }else {
+                    "".to_string()
+                };
+                let user = url.username();
+                let token = if let Some(token) = url.password() {
+                    token
+                } else {
+                    ""
+                };
+                let dict = RemoteDictionary::new(
+                    format!("{}://{}{}", url.scheme(), host, port),
+                    user.to_string(),
+                    token.to_string(),
+                );
+                return Some(WikitDictionary::Remote(dict));
+            },
+            _ => {
+                return None;
+            }
+        }
+    }
+    return None;
+}
+
+pub fn load_server_dictionary() -> WikitResult<Vec<WikitDictionary>> {
+    let mut dicts = vec![];
+    for uri in config::load_config()?.srvcfg.uris.iter() {
+        if let Some(dict) = load_dictionary_from_uri(uri) {
+            dicts.push(dict);
+        }
+    }
+    Ok(dicts)
+}
+
+pub fn load_client_dictionary() -> WikitResult<Vec<WikitDictionary>> {
+    let mut dicts = vec![];
+    for uri in config::load_config()?.cltcfg.uris.iter() {
+        if let Some(dict) = load_dictionary_from_uri(uri) {
+            dicts.push(dict);
+        }
+    }
+    Ok(dicts)
 }

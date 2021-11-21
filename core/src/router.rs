@@ -1,11 +1,22 @@
+use crate::config;
+use crate::wikit;
+use crate::crypto;
+
+use std::net::{IpAddr, Ipv4Addr};
+use std::{sync::Mutex, collections::HashMap};
+use std::path::Path;
+use std::sync::Arc;
+
 use sqlx::postgres::PgPoolOptions;
 use rocket::{Build, Request, response::content, catch, get, catchers, routes};
 use regex::Regex;
+use rocket::serde::{Serialize, Deserialize, json::Json};
 use once_cell::sync::Lazy;
 
-static WIKIT_CONFIG: Lazy<crate::config::WikitConfig> = Lazy::new(|| {
-    crate::config::load_config().expect("Cannot load wikit config")
+pub static DICTMP: Lazy<Arc<Mutex<HashMap<String, String>>>> = Lazy::new(|| {
+    Arc::new(Mutex::new(HashMap::new()))
 });
+
 
 #[catch(500)]
 fn internal_error() -> &'static str {
@@ -17,46 +28,112 @@ fn not_found(req: &Request) -> String {
     format!("I couldn't find '{}'. Try something else?", req.uri())
 }
 
-#[get("/q?<word>&<dictname>")]
-async fn query(word: String, dictname: String) -> content::Html<String> {
-    let meaning = if let Some(table) = &WIKIT_CONFIG.dict.get(&dictname) {
-        if let Ok(pool) = PgPoolOptions::new().max_connections(500)
-            .connect(&WIKIT_CONFIG.dburl).await {
-            let sql = format!("SELECT word, meaning FROM {} WHERE word ilike $1", table);
-            let query = sqlx::query_as::<_, (String, String)>(&sql)
-                .bind(format!("{}", word))
-                .fetch_one(&pool).await;
-            match query {
-                Ok(row) => {
-                    row.1
-                },
-                Err(_e) => format!("<p>No such word: {}</p>", word)
+#[get("/list")]
+async fn list() -> Json<Vec<wikit::DictList>> {
+    let mut dict = vec![];
+    if let Ok(config) = config::load_config() {
+        for uri in config.srvcfg.uris.iter() {
+            let dictid = crypto::md5(uri.as_bytes());
+            if let Some(dict) = wikit::load_dictionary_from_uri(uri) {
+                let style_key = format!("style[{}]", dictid);
+                let script_key = format!("script[{}]", dictid);
+                match dict {
+                    wikit::WikitDictionary::Local(d) => {
+                        if let Ok(mut dictmp) = DICTMP.lock() {
+                            if dictmp.get(&style_key).is_none() {
+                                dictmp.insert(style_key, d.head.style.clone());
+                            }
+                            if dictmp.get(&script_key).is_none() {
+                                dictmp.insert(script_key, d.head.script.clone());
+                            }
+                        }
+                    },
+                    wikit::WikitDictionary::Remote(d) => {
+                        if let Ok(mut dictmp) = DICTMP.lock() {
+                            if dictmp.get(&style_key).is_none() {
+                                dictmp.insert(style_key, d.get_style(&dictid));
+                            }
+                            if dictmp.get(&script_key).is_none() {
+                                dictmp.insert(script_key, d.get_script(&dictid));
+                            }
+                        }
+                    },
+                }
             }
-        } else {
-            format!("<p>Database connection is broken</p>")
+            if let Ok(mut dictmp) = DICTMP.lock() {
+                dictmp.insert(dictid.clone(), uri.to_string());
+            }
+            dict.push(wikit::DictList {
+                // FIXME(2021-11-21): give a nice dictionar name
+                name: dictid.clone(),
+                id: dictid.clone(),
+            });
         }
-    } else {
-        format!("<p>Unknown dictionary: {}</p>", dictname)
-    };
-    // Remove built-in style link
-    let re = Regex::new(r#"<link[^>]+.css[^>]+>"#).unwrap();
-    let meaning = re.replace_all(meaning.as_str(), "");
-    // Remote built-in image link
-    let re = Regex::new(r#"<img[^>]+>"#).unwrap();
-    let mut meaning = re.replace_all(&meaning, "").to_string();
-    // Replace built-in `@@@LINK` to `entry://` format which is used by `ui` (`ui` will listen all
-    // link click event, any link address that starts with `entry://` will cause a new remote
-    // query).
-    if meaning.starts_with("@@@LINK=") {
-        let word = meaning.replace("@@@LINK=", "");
-        let word = word.trim();
-        meaning = format!("See <a href=\"entry://{}\" style=\"color: blue\">{}</a>", word, word);
     }
-    content::Html(meaning.to_string())
+    Json(dict)
+}
+
+#[get("/style?<dictname>")]
+async fn style(dictname: String) -> String {
+    if let Ok(dictmp) = DICTMP.lock() {
+        let style_key = format!("style[{}]", dictname);
+        if let Some(style) = dictmp.get(style_key.as_str()) {
+            return style.to_string();
+        }
+    }
+    "".to_string()
+}
+
+#[get("/script?<dictname>")]
+async fn script(dictname: String) -> String {
+    let script_key = format!("script[{}]", dictname);
+    if let Ok(dictmp) = DICTMP.lock() {
+        if let Some(script) = dictmp.get(script_key.as_str()) {
+            return script.to_string();
+        }
+    }
+    "".to_string()
+}
+
+#[get("/query?<word>&<dictname>")]
+async fn query(word: String, dictname: String) -> Json<Vec<(String, String)>> {
+    let r = vec![];
+    if let Ok(mut dictmp) = DICTMP.lock() {
+        if let Some(uri) = dictmp.get(dictname.as_str()) {
+            if let Some(dict) = wikit::load_dictionary_from_uri(uri) {
+                match dict {
+                    wikit::WikitDictionary::Local(d) => {
+                        if let Ok(r) = d.lookup(word) {
+                            return Json(r);
+                        }
+                    },
+                    wikit::WikitDictionary::Remote(d) => {
+                        if let Ok(r) = d.lookup(&word, &dictname) {
+                            return Json(r);
+                        }
+                    },
+                }
+            }
+        }
+    }
+    return Json(r);
 }
 
 pub fn rocket() -> rocket::Rocket<Build> {
-    rocket::build()
-        .mount("/dict/", routes![query])
+    let cfg = match config::load_config() {
+        Ok(cfg) => {
+            rocket::Config {
+                port: cfg.srvcfg.port,
+                address: cfg.srvcfg.host.parse().unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
+                ..rocket::Config::debug_default()
+            }
+        },
+        Err(e) => {
+            println!("failed to load config with error: {:?}", e);
+            rocket::Config::default()
+        }
+    };
+    rocket::custom(&cfg)
+        .mount("/wikit/", routes![query, list, style, script])
         .register("/", catchers![internal_error, not_found])
 }

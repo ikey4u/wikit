@@ -23,7 +23,6 @@
   })
 
   function lookup(input) {
-    console.log(input);
     if (!input || input.length <= 0 || input.trim().length <= 0) {
       content = default_content;
       return;
@@ -37,7 +36,7 @@
     input = input.trim();
 
     invoke('lookup', {
-      dictpath: $dictSettings.dict.selected[0],
+      dictid: $dictSettings.dict.selected[0],
       word: input,
     }).then((resp) => {
       let meanings = resp["words"];

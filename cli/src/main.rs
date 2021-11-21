@@ -159,6 +159,7 @@ async fn main() -> AnyResult<()> {
             };
 
             if dict.is_present("create") {
+                // TODO(2021-11-21): refactor this out
                 let meta = match dict.value_of("metafile") {
                     None => MDXMeta::default(),
                     Some(path) => {
@@ -214,7 +215,7 @@ async fn main() -> AnyResult<()> {
                     }
                     (ResourceFormat::MDX | ResourceFormat::TEXT, ResourceFormat::WIKIT) => {
                         let outfile = Path::new(&output);
-                        let outfile = wikit::WikitDictionary::create(&input, Some(outfile))
+                        let outfile = wikit::LocalDictionary::create(&input, Some(outfile))
                             .context(elog!("failed to create wikit dictionary"))?;
                         println!("The wikit dictionary can be found at {}", outfile.display());
                     },

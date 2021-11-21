@@ -7,3 +7,5 @@ pub mod util;
 pub mod router;
 pub mod index;
 pub mod wikit;
+pub mod cache;
+pub mod crypto;

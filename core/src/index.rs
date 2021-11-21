@@ -8,8 +8,9 @@ use std::fs::File;
 use fst::automaton::Levenshtein;
 use fst::{IntoStreamer, Streamer, Map, MapBuilder};
 use memmap::MmapOptions;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum IndexFormat {
     FST = 1,
@@ -24,7 +25,7 @@ impl IndexFormat {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FSTIndex {
     path: std::path::PathBuf,
     offset: u64,
