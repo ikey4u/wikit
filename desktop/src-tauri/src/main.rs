@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wikit_core::config;
 use wikit_core::wikit;
 use wikit_core::wikit::WikitDictionary;
-use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, Event, Manager};
+use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, Event, Manager, WindowUrl, WindowBuilder};
 use tauri::api::dialog;
 use once_cell::sync::Lazy;
 
@@ -99,8 +99,11 @@ fn get_dict_list() -> Vec<String> {
 fn main() {
     let app = tauri::Builder::default()
         .menu(get_menu())
-        .on_menu_event(|event| {
-            match event.menu_item_id() {
+        .setup(|app| {
+            let window = app.get_window("main").unwrap();
+            let window_ = window.clone();
+            window.on_menu_event(move |event| {
+              match event.menu_item_id() {
                 "close" => {
                     println!("click close menu");
                     std::process::exit(0);
@@ -114,13 +117,34 @@ fn main() {
                         }
                     });
                 },
+                "open_config_dir" => {
+                    if let Ok(d) = config::get_config_dir() {
+                        let _ = opener::open(d);
+                    }
+                },
                 "about" => {
-                    println!("click about menu");
+                    dialog::message(Some(&window_), "Wikit Desktop", "A universal dictionary\nv0.0.1-beta.1\nhttps://github.com/ikey4u/wikit");
+                },
+                "feedback" => {
+                    let _ = opener::open("https://github.com/ikey4u/wikit/issues/new");
+                },
+                "manual" => {
+                    let _ = opener::open("https://github.com/ikey4u/wikit/wiki");
                 },
                 id @ _ => {
                     println!("unkown menu event: {}", id);
                 }
-           }
+              }
+            });
+            Ok(())
+        })
+        .on_page_load(|window, _| {
+          let window_ = window.clone();
+          window.listen("js-event", move |event| {
+              println!("got js-event with message '{:?}'", event.payload());
+              let reply = "something else".to_string();
+              window_.emit("rust-event", Some(reply)).expect("failed to emit");
+          });
         })
         .invoke_handler(tauri::generate_handler![lookup, get_dict_list])
         .build(tauri::generate_context!())
@@ -161,8 +185,9 @@ fn main() {
 fn get_menu() -> Menu {
     let filemenu = Submenu::new("File",
         Menu::new()
-            .add_item(CustomMenuItem::new("open".to_string(), "Open"))
-            .add_item(CustomMenuItem::new("close".to_string(), "Close"))
+            .add_item(CustomMenuItem::new("about".to_string(), "About Wikit Desktop"))
+            .add_item(CustomMenuItem::new("open_config_dir".to_string(), "Open Configuration Directory"))
+            .add_item(CustomMenuItem::new("close".to_string(), "Close and Exit"))
     );
     let editmenu = Submenu::new("Edit",
         Menu::new()
@@ -175,7 +200,8 @@ fn get_menu() -> Menu {
     );
     let about_menu = Submenu::new("Help",
         Menu::new()
-            .add_item(CustomMenuItem::new("about".to_string(), "About"))
+            .add_item(CustomMenuItem::new("feedback".to_string(), "Feedback"))
+            .add_item(CustomMenuItem::new("manual".to_string(), "Manual"))
     );
 
     Menu::new()

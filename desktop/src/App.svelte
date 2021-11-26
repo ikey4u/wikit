@@ -1,6 +1,7 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
+  import { listen, emit } from "@tauri-apps/api/event";
   import Settings from './Settings.svelte';
   import { dictSettings } from './store.js';
 
@@ -13,6 +14,7 @@
     </div>`;
   let content = default_content;
   let isSettingsOpened = false;
+  let unlisten;
   onMount(() => {
     invoke('get_dict_list').then((r) => {
       $dictSettings.dict.all = r;
@@ -20,7 +22,20 @@
         $dictSettings.dict.selected = [r[0]];
       }
     });
+    unlisten = listen("rust-event", (e) => {
+      console.log("got rust event: " + e);
+    });
   })
+
+  onDestroy(() => {
+    if (unlisten) {
+      unlisten()
+    }
+  })
+
+  function emitEvent() {
+    emit("js-event", "this is the payload string");
+  }
 
   function lookup(input) {
     if (!input || input.length <= 0 || input.trim().length <= 0) {
