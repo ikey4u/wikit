@@ -6,26 +6,46 @@ To be short, Wikit is a dictionary suite for human in [FOSS](https://en.wikipedi
 
 So what are planned to be included? The goal of this project is to make
 
-- A CLI tool to deal with a variety of dictionary formats
+- **A CLI tool to deal with a variety of dictionary formats**
 
-- Desktop application for Windows, Linux and MacOS
+    Currently it supports the follwing dictionary format
 
-- A dictionary server
+    - wikit
 
-- Mobile application for Android and iOS
+        It is wikit's own format, fully opensourced and powered by the awesome [FST](https://github.com/BurntSushi/fst) index algorithm
+
+        Wikit CLI can create wikit dictionary from MDX or text.
+
+    - MDX
+
+        It is a very popular close sourced dictionary format, but the format is almost disclosed by
+        reversing engineer. There are many tools invented to create, parse or unpack MDX dictionary,
+        and the implemention is variable which may cause compatibility problems.
+
+        Wikit CLI can create MDX from text and unpack MDX into text. It is not recommended that you
+        use Wikit CLI to create MDX dictionary and used in another dictionary client since there
+        may exist compatibility problem.
+
+    - MacOS dictionary (create from mdx, text)
+
+        Close sourced dictionary format provided by Apple, but apple provides toolkit to create
+        this type dictionary. Wikit CLI just use that toolkit to create macos dictionary from text
+        or mdx.
+
+- **Desktop application for Windows, Linux and MacOS**
+
+- **A dictionary server**
 
 # What is the project status?
 
-- CLI TOOL
+- CLI TOOL/**Done**
 
-    The CLI tool can parse/create MDX dictionary and create macos dictionary, see its usage in
-    `Installation and Usage` section.
+    See its usage in `Installation and Usage` section.
 
-- DESKTOP APPLICATION
+- DESKTOP APPLICATION/**Beta Done**
 
-    It is developed based on [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/).
-
-    The first version is almost finished but not released yet, and here are some snapshots
+    It is developed based on [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/),
+    and here are some snapshots
 
     - the main ui
 
@@ -35,21 +55,22 @@ So what are planned to be included? The goal of this project is to make
 
         ![lookup ui](./docs/imgs/lookup.jpg "lookup ui")
 
-- DICTIONARY SERVER
+- DICTIONARY SERVER/**Beta Done**
 
-    A quick and dirty demo is developed in `core/src/router.rs`, and here is the
-    [demo](http://106.53.152.194/wikit/).
-
-- MOBILE APPLICATION
-
-    No action for now.
+    It is usable for now, but there are many things to be improved.
 
 # Installation and Usage
+
+There are two tools provided by wikit, one is `Wikit Command Line` (abbreviated as wikit), the other is `Wikit Desktop`.
+The former is used to create, unpack, parse dictionary, or even used as a dictionary server, the
+latter is used as a dictionary client which you can lookup words from.
+
+## Wikit Command Line
 
 Download the tool from [release](https://github.com/ikey4u/wikit/releases) page, decompress the
 release packege and just fireup the tool `wikit`, you will see detail help information, for example
 
-    wikit 0.2.0-beta.1
+    wikit 0.3.0
     ikey4u <pwnkeeper@gmail.com>
     A universal dictionary - Wikit
 
@@ -65,8 +86,8 @@ release packege and just fireup the tool `wikit`, you will see detail help infor
         help      Prints this message or the help of the given subcommand(s)
         server    Run wikit as an API server
 
-There are serveral subcommands: `dict` and `server`. However `server` is not stable for now,
-please use it carefully. For `dict` subcommand, you can print its help information using following command
+You can see more detail help for subcommand, for example you can use the following command
+to see the help of subcommand `dict`:
 
     wikit dict
 
@@ -84,69 +105,37 @@ An example output is showed below
         -V, --version    Prints version information
 
     OPTIONS:
-            --css <css>          Path of the CSS file
-            --meta <metafile>    You could specify a meta file when create dictionary file. Wikit will use default meta info
-                                 if this option is not provided. The template is given below(include the parentheses):
-                                 (
-                                     title: "A generic MDX dictionary",
-                                     author: "An anonymous hero",
-                                     description: "Just for fun",
-                                 )
         -o, --output <output>    Same with <input>
             --table <table>      The table name in the database, you must provide this parameter if input/output is a
                                  database url
 
     ARGS:
-        <input>    The input file format depends on the value. File suffix reflects the format: .txt => text, .mdx =>
-                   mdx. If the value is a database url such as postgresql://user@localhost:5432/dictdb, then the input
-                   is a database
+        <input>    The input file format depends on the value. File suffix reflects the format, for example .txt =>
+                   text, .mdx => mdx, .wikit => wikit, .dictionary => macos dictionary. If the value is a database url
+                   such as postgresql://user@localhost:5432/dictdb, then the input is a database
 
-Some usage examples
+## Wikit Desktop
 
-    # Create a mdx file from text source
-    wikit dict --create --output /path/to/dict.mdx /path/to/dict.txt
+The desktop client use `wikit.toml` as its configuration, it can be find by click menu `Wikit Desktop/Open Configuration Directory`.
+The content of this file looks like
 
-    # Parse a mdx into text source
-    wikit dict --create --output /path/to/dict.txt /path/to/dict.mdx
+    [cltcfg]
+    uris = [
+        "file:///path/to/dict.wikit",
+    ]
 
-    # Dump information from mdx file
-    wikit dict --info /path/to/dict.mdx
+    [srvcfg]
+    uris = [
+    ]
+    host = "0.0.0.0"
+    port = 8888
 
-    # Create mac dictionary from MDX
-	wikit dict --create --output test/macmillan.dictionary ~/Downloads/macmillan.mdx
+Please see [wiki page](https://github.com/ikey4u/wikit/wiki/Wikit-Configuration) for more detail.
 
-    # Create mac dictionary from text(mdx soure file)
-	wikit dict --create --output test/demo.dictionary test/demo.txt
-
-Especially, when you create macos dictionary from MDX, the format used in mac is
-XHTML rather than HTML. As a result, you may encounter some errors such as
-
-       parser error : Couldn't find end of Start Tag link
-       <link  href="concise_bing.css" rel="stylesheet" type="text/css"
-
-and the link tag may look like
-
-       <link  href="concise_bing.css" rel="stylesheet" type="text/css">
-
-or
-
-       <link  href="concise_bing.css" rel="stylesheet" type="text/css" //>
-
-In the case above, the error is caused by the not self-enclosing tag `<link>`, the right content in XHTML
-style is showed below
-
-       <link  href="concise_bing.css" rel="stylesheet" type="text/css" />
-
-To solve the problem, you can change the intermedia text file(in fact, it is the MDX source) whose name
-is `${MDX_NAME}_wikit.txt` where `{MDX_NAME}` is your MDX file name. And it could be found in the same
-directory of your MDX file. Let's say you have a MDX file located in `/path/to/mymdx.mdx`,
-the corresponding text file will be `/path/to/mymdx_wikit.txt`. If you have trouble with XHTML,
-you could change `/path/to/mymdx_wikit.txt` and run the build command again.
-
-# Compatibility
+# MDX Dictionary Compatibility
 
 The first-class citizens supported by Wikit are opensourced dictionary tools such as
-[goldendict](https://github.com/goldendict/goldendict).  As a result, MDX created by Wikit will
+[goldendict](https://github.com/goldendict/goldendict). As a result, MDX created by Wikit will
 mainly be tested for them. Currently, MDX is tested with goldendict version 1.5.0-RC2+git, it works
 really well. If you have any other problems with the created MDX, please file an issue. MDX created
 by wikit is also tested with [MDict](https://www.mdict.cn) version 2.0.12, it works but the
