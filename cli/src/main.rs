@@ -13,7 +13,6 @@ use std::fs::File;
 
 use clap::{Arg, App, SubCommand, AppSettings, value_t_or_exit};
 use serde::Deserialize;
-use ron::de::from_reader;
 
 #[derive(Debug, Deserialize)]
 pub struct MDXMeta {
@@ -71,7 +70,7 @@ async fn main() -> AnyResult<()> {
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
-        .version("0.2.3")
+        .version("0.3.0")
         .author("ikey4u <pwnkeeper@gmail.com>")
         .about("A universal dictionary - Wikit")
         .subcommand(
@@ -90,26 +89,10 @@ async fn main() -> AnyResult<()> {
                 .long("--info")
                 .takes_value(false)
             )
-            .arg(Arg::with_name("metafile")
-                .help(
-                    format!(
-                        "You could specify a meta file when create dictionary file. Wikit will use default meta info if this option is not provided. The template is given below(include the parentheses):\n{}\n",
-                        MDXMeta::default().to_string()
-                    ).as_str()
-                )
-                .long("--meta")
-                .takes_value(true)
-            )
             .arg(Arg::with_name("output")
                 .help("Same with <input>")
                 .short("-o")
                 .long("--output")
-                .takes_value(true)
-            )
-            // TODO(2021-11-20): refactor this out
-            .arg(Arg::with_name("css")
-                .help("Path to the CSS file")
-                .long("--css")
                 .takes_value(true)
             )
             .arg(Arg::with_name("table")
@@ -159,21 +142,15 @@ async fn main() -> AnyResult<()> {
             };
 
             if dict.is_present("create") {
-                // TODO(2021-11-21): refactor this out
-                let meta = match dict.value_of("metafile") {
-                    None => MDXMeta::default(),
-                    Some(path) => {
-                        let path = Path::new(path);
-                        let metafile = File::open(path)
-                            .context(elog!("Failed to open meta file: {}", path.display()))?;
-                        from_reader(metafile).context("Failed to deserialize meat file")?
-                    }
-                };
                 let (pdir, stem, _suffix) = util::parse_path(input.as_str())
                     .context(elog!("failed to get path of input file: {}", input))?;
                 match (itype, otype) {
                     (ResourceFormat::TEXT, ResourceFormat::MDX) => {
-                        mdict::create_mdx(&meta.title, &meta.author, &meta.description, &input, &output)?;
+                        // TODO(2021-11-27): read from toml configuration
+                        let title = "wikit dictionary";
+                        let author = "anonymous";
+                        let description = "This dictionary is created by wikit (https://github.com/ikey4u/wikit)";
+                        mdict::create_mdx(title, author, description, &input, &output)?;
                     },
                     (ResourceFormat::MDX, ResourceFormat::TEXT) => {
                         let dict = mdict::parse_mdx(input.as_str(), None)?;
