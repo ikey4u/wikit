@@ -1,0 +1,65 @@
+name: Rust
+
+on:
+  #push:
+  #  branches: [ master ]
+  #pull_request:
+  #  branches: [ master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  build:
+
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-10.15, ubuntu-18.04, windows-2019]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Node.js environment
+      uses: actions/setup-node@v2.4.1
+    - name: install linux deps
+      if: startsWith(matrix.os,'ubuntu')
+      run: |
+        sudo apt install libwebkit2gtk-4.0-dev libappindicator3-dev
+    - name: Build Wikit CLI
+      working-directory: ./cli
+      run: |
+        cargo build --release
+    - name: Build Wikit Desktop
+      working-directory: ./desktop
+      run: |
+          npm i
+          npm run build
+          cargo install tauri-cli --version "^1.0.0-beta"
+          cd src-tauri && cargo tauri build
+    - name: Archive Linux Production
+      if: startsWith(matrix.os,'ubuntu')
+      uses: actions/upload-artifact@v2
+      with:
+        name: wikit-linux
+        path: |
+          target/release/wikit
+          target/release/bundle/appimage/*.AppImage
+    - name: Archive MacOS Production
+      if: startsWith(matrix.os, 'macos')
+      uses: actions/upload-artifact@v2
+      with:
+        name: wikit-macos
+        path: |
+          target/release/wikit
+          target/release/bundle/dmg/*.dmg
+    - name: Archive Windows Production
+      if: startsWith(matrix.os, 'windows')
+      uses: actions/upload-artifact@v2
+      with:
+        name: wikit-windows
+        path: |
+          target/release/wikit.exe
+          target/release/bundle/msi/*.msi
