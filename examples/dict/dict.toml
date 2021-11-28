@@ -1,0 +1,7 @@
+name = "wikit example dictionary"
+
+desc = '''
+This is just a wikit example dictionary, nothing more.
+'''
+
+author = "wikit author"

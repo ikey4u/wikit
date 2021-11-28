@@ -1,0 +1,79 @@
+ <!-- style and script are modified from https://www.w3schools.com/tags/att_button_name.asp -->
+<head>
+  <style type="text/css" media="screen">
+    .tabcontent {
+      display: none;
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      border-top: none;
+    }
+
+    .tab {
+      overflow: hidden;
+      border: 1px solid #ccc;
+      background-color: #f1f1f1;
+    }
+
+    .tab button {
+      background-color: inherit;
+      float: left;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      transition: 0.3s;
+      font-size: 17px;
+    }
+
+    .tab button:hover {
+      background-color: #ddd;
+    }
+
+    .tab button.active {
+      background-color: #ccc;
+    }
+
+    .tabcontent.active {
+      display: block;
+    }
+  </style>
+
+  <script>
+    function opentab(tabButton, tabContentID) {
+      // Reset tab button and content to default style
+      for (btn of document.getElementsByClassName("tabbtn")) {
+            btn.className = "tabbtn";
+      }
+      for (content of document.getElementsByClassName("tabcontent")) {
+            content.className = "tabcontent";
+            content.style.display = "none";
+      }
+
+      // active current tab button
+      tabButton.className = "tabbtn active";
+
+      // active current tab content
+      let tabContent = document.getElementById(tabContentID);
+      if (tabContent) {
+        tabContent.style.display = "block";
+        tabContent.className = "tabcontent active";
+      }
+    }
+  </script>
+</head>
+
+<div class="meaning">
+  <h2>cat</h2>
+  <div class="tab">
+    <button class="tabbtn active" onclick="opentab(event.currentTarget, 'explanation')">Explanation</button>
+    <button class="tabbtn" onclick="opentab(event.currentTarget, 'tips')">Tips</button>
+  </div>
+
+  <div id="explanation" class="tabcontent active">
+    <p>cat is an animal</p>
+  </div>
+
+  <div id="tips" class="tabcontent">
+    <p>cat is also a famous unix tool used to view file content</p>
+  </div>
+</div>

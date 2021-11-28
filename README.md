@@ -4,58 +4,17 @@
 
 To be short, Wikit is a dictionary suite for human in [FOSS](https://en.wikipedia.org/wiki/Free_and_open-source_software) style.
 
-So what are planned to be included? The goal of this project is to make
+So what are planned to be included? The goals of this project are to make
 
 - **A CLI tool to deal with a variety of dictionary formats**
 
-    Currently it supports the follwing dictionary format
-
-    - wikit
-
-        It is wikit's own format, fully opensourced and powered by the awesome [FST](https://github.com/BurntSushi/fst) index algorithm
-
-        Wikit CLI can create wikit dictionary from MDX or text.
-
-    - MDX
-
-        It is a very popular close sourced dictionary format, but the format is almost disclosed by
-        reversing engineer. There are many tools invented to create, parse or unpack MDX dictionary,
-        and the implemention is variable which may cause compatibility problems.
-
-        Wikit CLI can create MDX from text and unpack MDX into text. It is not recommended that you
-        use Wikit CLI to create MDX dictionary and used in another dictionary client since there
-        may exist compatibility problem.
-
-    - MacOS dictionary (create from mdx, text)
-
-        Close sourced dictionary format provided by Apple, but apple provides toolkit to create
-        this type dictionary. Wikit CLI just use that toolkit to create macos dictionary from text
-        or mdx.
-
 - **Desktop application for Windows, Linux and MacOS**
 
+    The desktop client is developed using [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/):
+
+    ![lookup ui](./docs/imgs/lookup.jpg "lookup ui")
+
 - **A dictionary server**
-
-# What is the project status?
-
-- CLI TOOL/**Done**
-
-    See its usage in `Installation and Usage` section.
-
-- DESKTOP APPLICATION/**Beta Done**
-
-    It is developed based on [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/),
-    and here are some snapshots
-
-    - the main ui
-
-        ![main ui](./docs/imgs/main.jpg "main ui")
-
-    - the lookup ui
-
-        ![lookup ui](./docs/imgs/lookup.jpg "lookup ui")
-
-- DICTIONARY SERVER/**Beta Done**
 
     It is usable for now, but there are many things to be improved.
 
@@ -65,102 +24,133 @@ There are two tools provided by wikit, one is `Wikit Command Line` (abbreviated 
 The former is used to create, unpack, parse dictionary, or even used as a dictionary server, the
 latter is used as a dictionary client which you can lookup words from.
 
-## Wikit Command Line
+You can download them from [Release](https://github.com/ikey4u/wikit/releases) page.
 
-Download the tool from [release](https://github.com/ikey4u/wikit/releases) page, decompress the
-release packege and just fireup the tool `wikit`, you will see detail help information, for example
+**To use Wikit Desktop on Windows, you must additionally install [webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section) and [vc_redist.x86](https://aka.ms/vs/17/release/vc_redist.x86.exe) or [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe).**
 
-    wikit 0.3.0
-    ikey4u <pwnkeeper@gmail.com>
-    A universal dictionary - Wikit
+## Creating dictionary
 
-    USAGE:
-        wikit [SUBCOMMAND]
+You can use wikit CLI to create wikit dictionary from text file, each word-meaning item of the text
+file holds **three** lines and should follow this format
 
-    FLAGS:
-        -h, --help       Prints help information
-        -V, --version    Prints version information
+```
+word
+meaning
+</>
+```
 
-    SUBCOMMANDS:
-        dict      Process dictionary file
-        help      Prints this message or the help of the given subcommand(s)
-        server    Run wikit as an API server
+`word` is keyword of your dictionary, it can be a single word like `cat`, `dog` or a phrase
+like `a lot of`, `never mind`. If `word` is long, it should be wrapped and put in one line.
 
-You can see more detail help for subcommand, for example you can use the following command
-to see the help of subcommand `dict`:
+`meaning` is your explanation for your `word`, it can be any valid html content. if `meaning` is
+long, it should be wrapped and put in one line. This constraint may be removed in future.
 
-    wikit dict
+`</>` is an end marker, write it in a single line
 
-An example output is showed below
+Here is an example
 
-    Process dictionary file
+```
+cat
+<div class="meaning"> <h2>cat</h2> cat is an animal </div>
+</>
 
-    USAGE:
-        wikit dict [FLAGS] [OPTIONS] <input>
+dog
+<div class="meaning"> <h2>dog</h2> dog is an animal </div>
+</>
+```
 
-    FLAGS:
-        -c, --create     Create dictionary file
-        -h, --help       Prints help information
-            --info       Dump basic information of dictionary file
-        -V, --version    Prints version information
+Let's assume the content above is saved as a file `/path/to/dict/dict.txt`, then 
+you can run the following command to create wikit dictionary
 
-    OPTIONS:
-        -o, --output <output>    Same with <input>
-            --table <table>      The table name in the database, you must provide this parameter if input/output is a
-                                 database url
+    wikit dict --create -o dict.wikit /path/to/dict/dict.txt
 
-    ARGS:
-        <input>    The input file format depends on the value. File suffix reflects the format, for example .txt =>
-                   text, .mdx => mdx, .wikit => wikit, .dictionary => macos dictionary. If the value is a database url
-                   such as postgresql://user@localhost:5432/dictdb, then the input is a database
+wikit also supports css style and javascript to decorate your `meaning`, you can organize your
+dictionary related files as below
 
-## Wikit Desktop
+    dict/
+    +-- dict.txt
+    +-- dict.css
+    +-- dict.js
+    +-- dict.toml
 
-The desktop client use `wikit.toml` as its configuration, it can be find by click menu `Wikit Desktop/Open Configuration Directory`.
-The content of this file looks like
+As you can see, your css and js file name must be the same with your dictionary source file.
+The `dict.toml` file is used to provid some basic information for your dictionary, here is an example
 
-    [cltcfg]
-    uris = [
-        "file:///path/to/dict.wikit",
-    ]
+    name = "wikit example dictionary"
 
-    [srvcfg]
-    uris = [
-    ]
-    host = "0.0.0.0"
-    port = 8888
+    desc = '''
+    This is just a wikit example dictionary, nothing more.
+    '''
 
-Please see [wiki page](https://github.com/ikey4u/wikit/wiki/Wikit-Configuration) for more detail.
+    author = "wikit author"
 
-# MDX Dictionary Compatibility
+`dict.css`, `dict.js` and `dict.toml` are all optional, provide only when you need them.
 
-The first-class citizens supported by Wikit are opensourced dictionary tools such as
-[goldendict](https://github.com/goldendict/goldendict). As a result, MDX created by Wikit will
-mainly be tested for them. Currently, MDX is tested with goldendict version 1.5.0-RC2+git, it works
-really well. If you have any other problems with the created MDX, please file an issue. MDX created
-by wikit is also tested with [MDict](https://www.mdict.cn) version 2.0.12, it works but the
-dictionary index seems does not work well.
+A full example can be found at [wikit/examples/dict](https://github.com/ikey4u/wikit/tree/master/examples/dict).
+
+What's more, wikit also support you create wikit dictionary directly from MDX file as below
+
+    wikit dict --create -o /path/to/dict.wikit /path/to/dict.mdx
+
+## Configuring dictionary
+
+Let's assume you have a wikit dictionary located at `/path/to/dict.wikit`, you should create a
+configuration file in the following location
+
+```
+macos: ${HOME}/Library/Application Support/wikit/wikit.toml
+linux: ${HOME}/.config/wikit/wikit.toml
+windows: C:\Users\YOUNAME\AppData\Roaming\wikit\wikit.toml
+```
+
+The content of `wikit.toml` looks like
+
+```
+[cltcfg]                          
+uris = [                          
+    "file:///path/to/dict.wikit", 
+]                                 
+                                  
+[srvcfg]                          
+uris = [                          
+]                                 
+host = "0.0.0.0"                  
+port = 8888
+```
+
+If you use wikit desktop, you should focus on the section `[cltcfg]` and do not touch `[srvcfg]` section.
+
+`uris` can be path to your wikit dictionary (the path must begin with `file://`) or API address (must
+starts with http or https) that your wikit server provides, such as `http://192.168.1.8:8888`.
+The API address should be IP address for now, domain support will be added in future.
+
+If run wikit as as a dictionary server, you should focus on `[srvcfg]` section.
+`uris` are the same as `[cltcfg]`, `host` and `port` will be the address your dictionary server
+listens to.
+
+## Using dictionary
+
+Everything is done, open `Wikit Desktop` and start to lookup.
+
+If you add, delete or change the wikit dictionary, remember to restart `Wikit Desktop`.
 
 # Building
 
-- Build for your development machine
+To build wikit command line
 
-        cargo build
+    cd cli
+    cargo build --release
 
-- Build cross-platform (mac, win, linux)
+To build wikit desktop
 
-    Ensure [docker](https://www.docker.com/) is installed and then
+    cd desktop
+    npm i
+    npm run build
+    cargo install tauri-cli --version "^1.0.0-beta"
 
-    - make development container
+    cargo tauri build
 
-            make image
-            make container
-
-    - build packages
-
-            make publish
-
-    The generated packages will be found in `release/` directory.
+You can find the generated files in `target/release`.
 
 # License
 

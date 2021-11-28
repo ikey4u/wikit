@@ -46,7 +46,7 @@ jobs:
         name: wikit-linux
         path: |
           target/release/wikit
-          target/release/bundle/appimage/*.AppImage
+          target/release/bundle/appimage/wikit*.AppImage
     - name: Archive MacOS Production
       if: startsWith(matrix.os, 'macos')
       uses: actions/upload-artifact@v2

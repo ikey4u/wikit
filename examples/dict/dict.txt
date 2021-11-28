@@ -1,0 +1,3 @@
+cat
+<div class="meaning"> <h2>cat</h2> <div class="tab"> <button class="tabbtn active" onclick="opentab(event.currentTarget, 'explanation')">Explanation</button> <button class="tabbtn" onclick="opentab(event.currentTarget, 'tips')">Tips</button> </div> <div id="explanation" class="tabcontent active"> <p>cat is an animal</p> </div> <div id="tips" class="tabcontent"> <p>cat is also a famous unix tool used to view file content</p> </div> </div>
+</>

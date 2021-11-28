@@ -18,6 +18,8 @@ static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(||
     Arc::new(Mutex::new(HashMap::new()))
 });
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct LookupResponse {
     // possible of (word, meaning) pair list
@@ -123,7 +125,11 @@ fn main() {
                     }
                 },
                 "about" => {
-                    dialog::message(Some(&window_), "Wikit Desktop", "A universal dictionary\nv0.0.1-beta.1\nhttps://github.com/ikey4u/wikit");
+                    dialog::message(
+                        Some(&window_),
+                        "Wikit Desktop",
+                        &format!("A universal dictionary\n{}\nhttps://github.com/ikey4u/wikit", VERSION),
+                    );
                 },
                 "feedback" => {
                     let _ = opener::open("https://github.com/ikey4u/wikit/issues/new");

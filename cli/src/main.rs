@@ -14,6 +14,8 @@ use std::fs::File;
 use clap::{Arg, App, SubCommand, AppSettings, value_t_or_exit};
 use serde::Deserialize;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 #[derive(Debug, Deserialize)]
 pub struct MDXMeta {
     title: String,
@@ -70,7 +72,7 @@ async fn main() -> AnyResult<()> {
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
-        .version("0.3.0")
+        .version(VERSION)
         .author("ikey4u <pwnkeeper@gmail.com>")
         .about("A universal dictionary - Wikit")
         .subcommand(
