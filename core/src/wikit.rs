@@ -192,29 +192,34 @@ impl RemoteDictionary {
     }
 
     pub fn get_dict_list(&self) -> WikitResult<Vec<DictList>> {
-        let r = reqwest::blocking::get(format!("{}/wikit/list", self.url)).unwrap().json::<Vec<DictList>>().unwrap();
+        let url = format!("{}/wikit/list", self.url);
+        let r = reqwest::blocking::get(url)?.json::<Vec<DictList>>()?;
         Ok(r)
     }
 
     pub fn lookup<P>(&self, word: P, dict: P) -> WikitResult<Vec<(String, String)>> where P: AsRef<str> {
         let r = reqwest::blocking::get(
             format!("{}/wikit/query?word={}&dictname={}", self.url, word.as_ref(), dict.as_ref())
-        ).unwrap().json::<Vec<(String, String)>>().unwrap();
+        )?.json::<Vec<(String, String)>>()?;
         Ok(r)
     }
 
     pub fn get_script<S>(&self, dict: S) -> String where S: AsRef<str> {
-        let r = reqwest::blocking::get(
-            format!("{}/wikit/script?dictname={}", self.url, dict.as_ref())
-        ).unwrap().text().unwrap();
-        r
+        if let Ok(r) = reqwest::blocking::get(format!("{}/wikit/script?dictname={}", self.url, dict.as_ref())) {
+            if let Ok(r) = r.text() {
+                return r;
+            }
+        }
+        "".to_string()
     }
 
     pub fn get_style<S>(&self, dict: S) -> String where S: AsRef<str> {
-        let r = reqwest::blocking::get(
-            format!("{}/wikit/style?dictname={}", self.url, dict.as_ref())
-        ).unwrap().text().unwrap();
-        r
+        if let Ok(r) = reqwest::blocking::get(format!("{}/wikit/style?dictname={}", self.url, dict.as_ref())) {
+            if let Ok(r) = r.text() {
+                return r;
+            }
+        }
+        "".to_string()
     }
 }
 
@@ -496,7 +501,7 @@ pub fn load_dictionary_from_uri<S>(uri: S) -> Option<WikitDictionary> where S: A
                     ""
                 };
                 let dict = RemoteDictionary::new(
-                    format!("{}://{}{}", url.scheme(), host, port),
+                    format!("{}://{}{}{}", url.scheme(), host, port, url.path()),
                     user.to_string(),
                     token.to_string(),
                 );

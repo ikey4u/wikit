@@ -34,6 +34,9 @@ pub enum WikitError {
 
     #[error("FSTLevenshteinError error")]
     FSTLevenshteinError(#[from] fst::automaton::LevenshteinError),
+
+    #[error("Reqwest Error")]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 pub type WikitResult<T> = std::result::Result<T, WikitError>;

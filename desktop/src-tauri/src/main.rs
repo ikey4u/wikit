@@ -84,6 +84,8 @@ fn get_dict_list() -> Vec<String> {
                         for d in ds {
                             dictdb.insert(d.id.clone(), dict.clone());
                         }
+                    } else {
+                        println!("failed to get remote dictionary list");
                     }
                 },
             }
