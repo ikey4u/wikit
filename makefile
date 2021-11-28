@@ -8,3 +8,6 @@ release:
 
 cli:
 	@cargo install --path cli
+
+dbgcore:
+	@cargo test test_core_debug -- --nocapture

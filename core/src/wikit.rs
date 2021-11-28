@@ -121,14 +121,16 @@ impl WikitHead {
             namesz: be_u16 >>
             name: map_res!(take!(namesz),
                 |x: &[u8]| -> AnyResult<String> {
-                    let name = String::from_utf8(x.to_vec()).context(elog!("cannot get name"))?;
+                    let name = String::from_utf8(x.to_vec())
+                        .context(elog!("failed to get wikti dictionary name"))?;
                     Ok(name)
                 }
             ) >>
             descsz: be_u16 >>
             desc: map_res!(take!(descsz),
                 |x: &[u8]| -> AnyResult<String> {
-                    let desc = String::from_utf8(x.to_vec()).context(elog!("cannot get desc"))?;
+                    let desc = String::from_utf8(x.to_vec())
+                        .context(elog!("failed to get dictionary description"))?;
                     Ok(desc)
                 }
             ) >>
@@ -169,7 +171,13 @@ impl WikitHead {
                 }
             )
         );
-        Ok(r.unwrap().1)
+
+        match r {
+            Ok(r) => Ok(r.1),
+            Err(e) => {
+                Err(WikitError::new(format!("failed to parse WikitHead: {:?}", e)))
+            }
+        }
     }
 }
 
@@ -232,7 +240,7 @@ impl RemoteDictionary {
 ///
 /// if version is 0x01, then the follwoing layout is
 ///
-///      hdrsz:2
+///      hdrsz:4
 ///      namesz:2
 ///      name:namesz
 ///      descsz:2
@@ -324,7 +332,7 @@ impl LocalDictionary {
         writer.write(&LATEST_WIKIT_FMT_VERSION.to_be_bytes()[..])?;
         // hdrsz
         let hdrsz_pos = writer.seek(SeekFrom::Current(0))?;
-        writer.seek(SeekFrom::Current(2))?;
+        writer.seek(SeekFrom::Current(4))?;
         // namesz and name
         let namesz = conf.name.len() as u16;
         writer.write(&namesz.to_be_bytes()[..])?;
@@ -357,7 +365,7 @@ impl LocalDictionary {
         writer.write(&style.as_bytes()[..])?;
 
         // save header size
-        let hdrsz = writer.seek(SeekFrom::Current(0))? as u16;
+        let hdrsz = writer.seek(SeekFrom::Current(0))? as u32;
         writer.seek(SeekFrom::Start(hdrsz_pos))?;
         writer.write(&hdrsz.to_be_bytes()[..])?;
         writer.seek(SeekFrom::Start(hdrsz as u64))?;
@@ -425,9 +433,9 @@ impl LocalDictionary {
             return Err(WikitError::new("Wrong wikit version"));
         }
 
-        let mut hdrsz = [0u8; 2];
+        let mut hdrsz = [0u8; 4];
         file.read_exact(&mut hdrsz)?;
-        let hdrsz = u16::from_be_bytes(hdrsz) as usize;
+        let hdrsz = u32::from_be_bytes(hdrsz) as usize;
 
         let hdrbuf = file.bytes().take(hdrsz).filter_map(Result::ok).collect::<Vec<u8>>();
         if hdrbuf.len() != hdrsz {

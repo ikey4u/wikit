@@ -9,3 +9,7 @@ pub mod index;
 pub mod wikit;
 pub mod cache;
 pub mod crypto;
+
+#[test]
+fn test_core_debug() {
+}
