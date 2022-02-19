@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wikit_core::config;
 use wikit_core::wikit;
 use wikit_core::wikit::WikitDictionary;
-use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, Event, Manager, WindowUrl, WindowBuilder};
+use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, Manager, WindowUrl, WindowBuilder};
 use tauri::api::dialog;
 use once_cell::sync::Lazy;
 
@@ -160,9 +160,9 @@ fn main() {
 
     app.run(|app_handle, e| match e {
         // Application is ready (triggered only once)
-        Event::Ready => {
+        RunEvent::Ready => {
         },
-        Event::CloseRequested { label, api, .. } => {
+        RunEvent::CloseRequested { label, api, .. } => {
             let app_handle = app_handle.clone();
             let window = app_handle.get_window(&label).unwrap();
             // prevent the event loop to close
@@ -181,7 +181,7 @@ fn main() {
                 },
             );
         },
-        Event::ExitRequested { api, .. } => {
+        RunEvent::ExitRequested { api, .. } => {
             // Keep the event loop running even if all windows are closed
             // This allow us to catch system tray events when there is no window
             api.prevent_exit();

@@ -134,6 +134,24 @@ Everything is done, open `Wikit Desktop` and start to lookup.
 
 If you add, delete or change the wikit dictionary, remember to restart `Wikit Desktop`.
 
+# Developement
+
+Install tauri-cli
+
+    cargo install --git https://github.com/tauri-apps/tauri --tag cli.rs-v1.0.0-rc.6 tauri-cli 
+
+and check the version
+
+    cargo tauri --version
+
+Start web server using
+
+    npm run dev
+
+In a new terminal, build the app
+
+    cargo tauri dev
+
 # Building
 
 To build wikit command line

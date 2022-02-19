@@ -12,15 +12,15 @@ build = "src/build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.0.0-beta.4" }
+tauri-build = { git = "https://github.com/tauri-apps/tauri", tag = "tauri-build-v1.0.0-rc.3", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { git = "https://github.com/tauri-apps/tauri/", rev = "411618f0def040fc412a93e28bcd868180e2c29e", features = ["api-all"] }
+tauri = { git = "https://github.com/tauri-apps/tauri/", tag = "v1.0.0-rc.5", features = ["api-all"] }
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 wikit-core = { path = "../../core" }
-once_cell = "1.8.0"
+once_cell = "1.9.0"
 opener = "0.5.0"
 
 [features]
