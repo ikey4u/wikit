@@ -1,9 +1,9 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
   import { listen, emit } from "@tauri-apps/api/event";
   import Settings from './Settings.svelte';
   import { dictSettings } from './store.js';
+  import ffi from './ffi.js';
 
   let timer;
   let input;
@@ -15,13 +15,13 @@
   let content = default_content;
   let isSettingsOpened = false;
   let unlisten;
-  onMount(() => {
-    invoke('get_dict_list').then((r) => {
-      $dictSettings.dict.all = r;
-      if (r.length > 0) {
-        $dictSettings.dict.selected = [r[0]];
-      }
-    });
+  onMount(async () => {
+    let r = await ffi.get_dict_list();
+    $dictSettings.dict.all = r;
+    if (r.length > 0) {
+      $dictSettings.dict.selected = [r[0]];
+    }
+
     unlisten = listen("rust-event", (e) => {
       console.log("got rust event: " + e);
     });
@@ -37,7 +37,7 @@
     emit("js-event", "this is the payload string");
   }
 
-  function lookup(input) {
+  async function lookup(input) {
     if (!input || input.length <= 0 || input.trim().length <= 0) {
       content = default_content;
       return;
@@ -48,27 +48,22 @@
       return;
     }
 
-    input = input.trim();
-
-    invoke('lookup', {
-      dictid: $dictSettings.dict.selected[0],
-      word: input,
-    }).then((resp) => {
-      let meanings = resp["words"];
-      let meaning = meanings[input]
-      if (!meaning) {
-        let possible_words = [];
-        for (let key in meanings) {
-          possible_words.push(key);
-        }
-        if (possible_words.length > 0) {
-          meaning = `<p> not found <b>${input}</b>, would you mean <b>${possible_words}</b>? </p>`;
-        } else {
-          meaning = `<p> not found <b>${input}</b> and related words </p>`
-        }
+    input = input.trim().toLowerCase();
+    let resp = await ffi.lookup($dictSettings.dict.selected[0], input);
+    let meanings = resp["words"];
+    let meaning = meanings[input]
+    if (!meaning) {
+      let possible_words = [];
+      for (let key in meanings) {
+        possible_words.push(key);
       }
-      updateContent(meaning, resp["script"], resp["style"]);
-    });
+      if (possible_words.length > 0) {
+        meaning = `<p> not found <b>${input}</b>, would you mean <b>${possible_words}</b>? </p>`;
+      } else {
+        meaning = `<p> not found <b>${input}</b> and related words </p>`
+      }
+    }
+    updateContent(meaning, resp["script"], resp["style"]);
   }
 
   function openSettings() {

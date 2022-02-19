@@ -15,8 +15,8 @@
     "@smui/dialog": "^6.0.0-beta.2",
     "@smui/list": "^6.0.0-beta.2",
     "@smui/radio": "^6.0.0-beta.2",
-    "@tauri-apps/api": "^1.0.0-beta.8",
-    "@tauri-apps/cli": "^1.0.0-beta.10",
+    "@tauri-apps/api": "^1.0.0-rc.1",
+    "@tauri-apps/cli": "^1.0.0-rc.5",
     "rollup": "^2.3.4",
     "rollup-plugin-css-only": "^3.1.0",
     "rollup-plugin-livereload": "^2.0.0",
@@ -25,6 +25,7 @@
     "svelte": "^3.0.0"
   },
   "dependencies": {
+    "latest": "^0.2.0",
     "sirv-cli": "^1.0.0"
   }
 }

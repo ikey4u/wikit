@@ -6,4 +6,3 @@ export const dictSettings = writable({
     'selected': [],
   },
 });
-

@@ -1,3 +1,23 @@
+<script lang="ts">
+  import Dialog, { Title, Content, Actions, InitialFocus } from '@smui/dialog';
+  import Button, { Label } from '@smui/button';
+  import List, { Item, Graphic, Text } from '@smui/list';
+  import Radio from '@smui/radio';
+  import { dictSettings } from './store.js';
+  import ffi from './ffi.js';
+
+  let selection = '';
+  let open = false;
+
+  function closeHandler(e) {
+    if (e.detail.action === 'accept') {
+      if (selection.trim().length > 0) {
+        $dictSettings.dict.selected = [selection];
+      }
+    }
+  }
+</script>
+
  <Dialog
   bind:open
   selection
@@ -32,26 +52,16 @@
   </Actions>
 </Dialog>
 
-<div class="button options-button" on:click={ () => (open = true) }>+</div>
-
-<script lang="ts">
-  import Dialog, { Title, Content, Actions, InitialFocus } from '@smui/dialog';
-  import Button, { Label } from '@smui/button';
-  import List, { Item, Graphic, Text } from '@smui/list';
-  import Radio from '@smui/radio';
-  import { dictSettings } from './store.js';
-
-  let selection = '';
-  let open = false;
-
-  function closeHandler(e) {
-    if (e.detail.action === 'accept') {
-      if (selection.trim().length > 0) {
-        $dictSettings.dict.selected = [selection];
-      }
+<div class="button options-button" on:click={
+  async () => {
+   let r = await ffi.get_dict_list();
+    $dictSettings.dict.all = r;
+    if (r.length > 0) {
+      $dictSettings.dict.selected = [r[0]];
     }
+    open = true
   }
-</script>
+}>+</div>
 
 <style>
   .button {

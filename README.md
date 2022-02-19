@@ -164,8 +164,7 @@ To build wikit desktop
     cd desktop
     npm i
     npm run build
-    cargo install tauri-cli --version "^1.0.0-beta"
-
+    # refer Developement section to see the installation of cargo-tauri
     cargo tauri build
 
 You can find the generated files in `target/release`.
