@@ -21,6 +21,7 @@ const WIKIT_MAGIC: &'static str = "WIKIT516";
 // the latest wikit dictionary format version
 const LATEST_WIKIT_FMT_VERSION: u32 = 0x00_00_00_01;
 
+// TODO(2022-02-19): select a better type name
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DictList {
     pub name: String,

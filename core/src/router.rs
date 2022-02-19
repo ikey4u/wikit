@@ -1,16 +1,14 @@
 use crate::config;
 use crate::wikit;
 use crate::crypto;
+use crate::util;
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::{sync::Mutex, collections::HashMap};
-use std::path::Path;
 use std::sync::Arc;
 
-use sqlx::postgres::PgPoolOptions;
-use rocket::{Build, Request, response::content, catch, get, catchers, routes};
-use regex::Regex;
-use rocket::serde::{Serialize, Deserialize, json::Json};
+use rocket::{Build, Request, catch, get, catchers, routes};
+use rocket::serde::json::Json;
 use once_cell::sync::Lazy;
 
 pub static DICTMP: Lazy<Arc<Mutex<HashMap<String, String>>>> = Lazy::new(|| {
@@ -30,47 +28,35 @@ fn not_found(req: &Request) -> String {
 
 #[get("/list")]
 async fn list() -> Json<Vec<wikit::DictList>> {
-    let mut dict = vec![];
+    let mut dictlist = vec![];
     if let Ok(config) = config::load_config() {
         for uri in config.srvcfg.uris.iter() {
             let dictid = crypto::md5(uri.as_bytes());
             if let Some(dict) = wikit::load_dictionary_from_uri(uri) {
                 let style_key = format!("style[{}]", dictid);
                 let script_key = format!("script[{}]", dictid);
-                match dict {
-                    wikit::WikitDictionary::Local(d) => {
-                        if let Ok(mut dictmp) = DICTMP.lock() {
-                            if dictmp.get(&style_key).is_none() {
-                                dictmp.insert(style_key, d.head.style.clone());
-                            }
-                            if dictmp.get(&script_key).is_none() {
-                                dictmp.insert(script_key, d.head.script.clone());
-                            }
+                if let wikit::WikitDictionary::Local(d) = dict {
+                    if let Ok(mut dictmp) = DICTMP.lock() {
+                        if dictmp.get(&style_key).is_none() {
+                            dictmp.insert(style_key, d.head.style.clone());
                         }
-                    },
-                    wikit::WikitDictionary::Remote(d) => {
-                        if let Ok(mut dictmp) = DICTMP.lock() {
-                            if dictmp.get(&style_key).is_none() {
-                                dictmp.insert(style_key, d.get_style(&dictid));
-                            }
-                            if dictmp.get(&script_key).is_none() {
-                                dictmp.insert(script_key, d.get_script(&dictid));
-                            }
+                        if dictmp.get(&script_key).is_none() {
+                            dictmp.insert(script_key, d.head.script.clone());
                         }
-                    },
+                    }
+                    if let Ok(mut dictmp) = DICTMP.lock() {
+                        dictmp.insert(dictid.clone(), uri.to_string());
+                    }
+
+                    dictlist.push(wikit::DictList {
+                        name: d.head.name,
+                        id: dictid.clone(),
+                    });
                 }
             }
-            if let Ok(mut dictmp) = DICTMP.lock() {
-                dictmp.insert(dictid.clone(), uri.to_string());
-            }
-            dict.push(wikit::DictList {
-                // FIXME(2021-11-21): give a nice dictionar name
-                name: dictid.clone(),
-                id: dictid.clone(),
-            });
         }
     }
-    Json(dict)
+    Json(dictlist)
 }
 
 #[get("/style?<dictname>")]

@@ -19,7 +19,7 @@
     let r = await ffi.get_dict_list();
     $dictSettings.dict.all = r;
     if (r.length > 0) {
-      $dictSettings.dict.selected = [r[0]];
+      $dictSettings.dict.selected = [r[0].id];
     }
 
     unlisten = listen("rust-event", (e) => {
@@ -48,8 +48,18 @@
       return;
     }
 
+    let dictid = $dictSettings.dict.selected[0];
+    if (!dictid) {
+      if ($dictSettings.dict.all.length > 0) {
+        dictid = $dictSettings.dict.all[0].id
+      } else {
+        console.log("no dictionary is found, stop lookup");
+        return;
+      }
+    }
+
     input = input.trim().toLowerCase();
-    let resp = await ffi.lookup($dictSettings.dict.selected[0], input);
+    let resp = await ffi.lookup(dictid, input);
     let meanings = resp["words"];
     let meaning = meanings[input]
     if (!meaning) {

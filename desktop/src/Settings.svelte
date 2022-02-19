@@ -32,9 +32,9 @@
         {#each $dictSettings.dict.all as dict, i}
           <Item>
             <Graphic>
-              <Radio bind:group={selection} value="{dict}" />
+              <Radio bind:group={selection} value="{dict.id}" />
             </Graphic>
-            <Text>{dict}</Text>
+            <Text>{dict.name}</Text>
           </Item>
         {/each}
       </List>
@@ -56,9 +56,6 @@
   async () => {
    let r = await ffi.get_dict_list();
     $dictSettings.dict.all = r;
-    if (r.length > 0) {
-      $dictSettings.dict.selected = [r[0]];
-    }
     open = true
   }
 }>+</div>

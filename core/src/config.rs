@@ -11,26 +11,27 @@
 ///     [srvcfg]
 ///     uris = [
 ///         "file://<filesystem path>",
-///         "https://[user@token]<wikit api router>",
-///         "http://[user@token]<wikit api router>",
 ///     ]
 ///     port = 8888
 ///     host = "0.0.0.0"
 ///
-/// `[cltcfg]` is used for wikit desktop client, and `[srvcfg]` is used for serving dictionary.
+/// `[cltcfg]` is used for wikit desktop client, and `[srvcfg]` is used for serving dictionaries.
 ///
 /// `uris` are a list of [URI](https://en.wikipedia.org/wiki/Uniform_Resource_Identifier) which
-/// refers directory resource path, supported URI are
+/// refers directory resource path, supported URIs are
 ///
-/// - file://
+/// - `file://`
 ///
 ///     This refers your local file on your system, such as `file:///home/user/Downloads/awesome.wikit`
 ///     where `/home/user/Downloads/awesome.wikit` is the full path to your dictionary
 ///     `awesome.wikit` on your system.
 ///
-/// - https:// and http://
+/// - `https://` and `http://`
 ///
-///     wikit allows you access remote hosted dictionary by network.
+///     Wikit allows client access remote hosted dictionary by network. However, this type URI is
+///     only allowed in `[cltcfg]` section, if them does appear in `[srvcfg]`, then will be ignored.
+///
+///     Only IP address is allowed for now, domain will be added in future.
 ///
 ///     Assuming the base url of the remote server is `https://example.com`, then there must exist following API
 ///

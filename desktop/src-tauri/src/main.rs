@@ -69,20 +69,22 @@ fn lookup(dictid: String, word: String) -> LookupResponse {
 }
 
 #[tauri::command]
-fn get_dict_list() -> Vec<String> {
+fn get_dict_list() -> Vec<wikit::DictList> {
+    let mut dictlist = vec![];
     let mut dictdb = DICTDB.lock().unwrap();
-
     if let Ok(dicts) = wikit::load_client_dictionary() {
         for dict in dicts {
             match dict {
                 wikit::WikitDictionary::Local(ref ld) => {
                     let id = format!("{}", ld.path.display());
+                    dictlist.push(wikit::DictList{ name: ld.head.name.clone(), id: id.clone() });
                     dictdb.insert(id.clone(), dict);
                 },
                 wikit::WikitDictionary::Remote(ref rd) => {
                     if let Ok(ds) = rd.get_dict_list() {
                         for d in ds {
                             dictdb.insert(d.id.clone(), dict.clone());
+                            dictlist.push(d);
                         }
                     } else {
                         println!("failed to get remote dictionary list");
@@ -91,12 +93,6 @@ fn get_dict_list() -> Vec<String> {
             }
         }
     }
-
-    let mut dictlist = vec![];
-    for (k, _) in dictdb.iter() {
-        dictlist.push(k.to_string());
-    }
-
     dictlist
 }
 
