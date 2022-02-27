@@ -5,6 +5,7 @@ use std::process::Command;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::io::{Error, ErrorKind};
+use std::net::TcpListener;
 
 struct ArgParser<'a> {
     buf: &'a str,
@@ -148,6 +149,19 @@ pub fn normalize_word<S>(word: S) -> String where S: AsRef<str> {
     word.to_lowercase()
 }
 
+// Get available TCP port
+//
+// If `default_port` is some, then check if `default_port` is available, if yes then return this
+// port, otherwise pick one port from [6000, 9000).
+pub fn get_free_tcp_port(default_port: Option<u16>) -> Option<u16> {
+    if let Some(port) = default_port {
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return default_port
+        }
+    }
+    (6000..9000).find(|port| TcpListener::bind(("127.0.0.1", *port)).is_ok())
+}
+
 #[test]
 fn test_argparser() {
     let cmd = "a bc def";
@@ -183,3 +197,4 @@ fn parse_path_test() {
         assert_eq!(true, false);
     }
 }
+

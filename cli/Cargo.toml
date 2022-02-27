@@ -1,6 +1,6 @@
 [package]
 name = "wikit"
-version = "0.4.0-beta.1"
+version = "0.4.0-beta.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,5 +10,5 @@ wikit-core = { path = "../core" }
 clap = "2"
 serde = "1.0"
 serde_derive = "1.0"
-rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "0d53e23" }
+rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "91e3b4397a1637d0f55f23db712cf7bda0c7f891" }
 anyhow = "1.0.38"

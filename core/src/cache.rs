@@ -1,7 +1,6 @@
 use crate::wikit;
 
 use std::{sync::Mutex, collections::HashMap};
-use std::path::Path;
 use std::sync::Arc;
 
 use once_cell::sync::Lazy;
@@ -26,7 +25,6 @@ fn query(word: String, dictname: String) -> String {
                 },
                 wikit::WikitDictionary::Remote(d) => {
                 },
-                _ => {}
             }
         } else {
         }

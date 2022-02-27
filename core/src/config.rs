@@ -55,7 +55,6 @@ use crate::error::{AnyResult, Context};
 use crate::elog;
 
 use std::fs::{self, File};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::io::{Read, Write};
 
@@ -99,9 +98,6 @@ impl Default for WikitConfig {
 
 pub fn load_config() -> AnyResult<WikitConfig> {
     let confdir = get_config_dir().context(elog!("cannot get user config directory"))?;
-    if !confdir.exists() {
-        fs::create_dir_all(&confdir).context(elog!("failed to create {}", confdir.display()))?;
-    }
     let confpath = confdir.join("wikit.toml");
     if !confpath.exists() {
         File::create(&confpath)
@@ -119,5 +115,18 @@ pub fn load_config() -> AnyResult<WikitConfig> {
 pub fn get_config_dir() -> AnyResult<PathBuf> {
     let sysconfdir = dirs::config_dir().context(elog!("cannot get system config directory"))?;
     let confdir = sysconfdir.join("wikit");
+    if !confdir.exists() {
+        fs::create_dir_all(&confdir).context(elog!("failed to create {}", confdir.display()))?;
+    }
     return Ok(confdir);
+}
+
+pub fn get_static_dir() -> AnyResult<PathBuf> {
+    let confdir = get_config_dir()?;
+    let staticdir = confdir.join("static");
+    if !staticdir.exists() {
+        fs::create_dir_all(&staticdir)
+            .context(elog!("failed to create static directory: {}", staticdir.display()))?;
+    }
+    Ok(staticdir)
 }

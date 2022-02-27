@@ -6,11 +6,17 @@
 use std::{sync::Mutex, collections::HashMap};
 use std::path::Path;
 use std::sync::Arc;
+use anyhow::{Context, Result};
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::sync::atomic::{AtomicU16, Ordering};
 
 use wikit_core::config;
+use wikit_core::crypto;
 use wikit_core::wikit;
+use wikit_core::util;
 use wikit_core::wikit::WikitDictionary;
-use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, Manager, WindowUrl, WindowBuilder};
+use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, Manager};
 use tauri::api::dialog;
 use once_cell::sync::Lazy;
 
@@ -20,11 +26,16 @@ static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(||
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+// internal static file server port
+static INTERNAL_FS_PORT: AtomicU16 = AtomicU16::new(7561);
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct LookupResponse {
     // possible of (word, meaning) pair list
     words: HashMap<String, String>,
+    // html js tag
     script: String,
+    // html css tag
     style: String,
 }
 
@@ -65,7 +76,25 @@ fn lookup(dictid: String, word: String) -> LookupResponse {
             },
         }
     }
-    LookupResponse::new(mp, script, style)
+
+    let staticdir = config::get_static_dir().unwrap();
+    let staticid = crypto::md5(dictid.as_bytes());
+    let cssfile = staticdir.join(format!("{staticid}.css"));
+    let jsfile = staticdir.join(format!("{staticid}.js"));
+    let write_file = |content: &[u8], file: &Path| {
+        if !file.exists() {
+            let mut file = OpenOptions::new().create(true).write(true).truncate(true).open(file).unwrap();
+            file.write(content).unwrap();
+        }
+    };
+    write_file(style.as_bytes(), cssfile.as_path());
+    write_file(script.as_bytes(), jsfile.as_path());
+
+    let port = INTERNAL_FS_PORT.load(Ordering::SeqCst);
+
+    let csstag = format!(r#" <link rel="stylesheet" href="http://127.0.0.1:{port}/static/{staticid}.css"> "#);
+    let jstag = format!(r#" <script type="text/javascript" src="http://127.0.0.1:{port}/static/{staticid}.js"></script> "#);
+    LookupResponse::new(mp, jstag.to_string(), csstag.to_string())
 }
 
 #[tauri::command]
@@ -96,7 +125,39 @@ fn get_dict_list() -> Vec<wikit::DictList> {
     dictlist
 }
 
-fn main() {
+// Copied and modified from `https://github.com/tokio-rs/axum/tree/main/examples/static-file-server`
+async fn http_file_server() -> Result<()> {
+    use axum::{http::StatusCode, routing::get_service, Router};
+    use std::net::SocketAddr;
+    use tower_http::services::ServeDir;
+
+    let app = Router::new().nest(
+        "/static",
+        get_service(ServeDir::new(config::get_static_dir()?)).handle_error(|error: std::io::Error| async move {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Unhandled internal error: {}", error),
+            )
+        }),
+    );
+
+    let port = util::get_free_tcp_port(Some(INTERNAL_FS_PORT.load(Ordering::SeqCst)))
+        .context("failed to get static file sever port")?;
+    println!("[+] Internal file server listens at 127.0.0.1:{port}");
+    INTERNAL_FS_PORT.store(port, Ordering::SeqCst);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], INTERNAL_FS_PORT.load(Ordering::SeqCst)));
+    axum::Server::bind(&addr).serve(app.into_make_service()).await?;
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    tokio::spawn(async {
+        http_file_server().await.expect("failed to run internal static file server");
+    });
+
     let app = tauri::Builder::default()
         .menu(get_menu())
         .setup(|app| {
@@ -126,7 +187,7 @@ fn main() {
                     dialog::message(
                         Some(&window_),
                         "Wikit Desktop",
-                        &format!("A universal dictionary\n{}\nhttps://github.com/ikey4u/wikit", VERSION),
+                        &format!("A universal dictionary\nv{}\nhttps://github.com/ikey4u/wikit", VERSION),
                     );
                 },
                 "feedback" => {
@@ -183,7 +244,9 @@ fn main() {
             api.prevent_exit();
         },
         _ => {}
-    })
+    });
+
+    Ok(())
 }
 
 fn get_menu() -> Menu {

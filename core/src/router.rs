@@ -1,7 +1,6 @@
 use crate::config;
 use crate::wikit;
 use crate::crypto;
-use crate::util;
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::{sync::Mutex, collections::HashMap};
@@ -84,7 +83,7 @@ async fn script(dictname: String) -> String {
 #[get("/query?<word>&<dictname>")]
 async fn query(word: String, dictname: String) -> Json<Vec<(String, String)>> {
     let r = vec![];
-    if let Ok(mut dictmp) = DICTMP.lock() {
+    if let Ok(dictmp) = DICTMP.lock() {
         if let Some(uri) = dictmp.get(dictname.as_str()) {
             if let Some(dict) = wikit::load_dictionary_from_uri(uri) {
                 match dict {
