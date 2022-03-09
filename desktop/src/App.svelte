@@ -99,20 +99,6 @@
 
   let frame;
   function onFrameLoad() {
-    // Remove all inline onclick listeners, since its not allowed by content security policy (CSP).
-    // But CSP allows us use addEventListener to listen click event.
-    const inlineClicks = frame.contentDocument.querySelectorAll('[onclick]');
-    inlineClicks.forEach(element => {
-      let funcname = element.getAttribute("onclick").split('(')[0].trim();
-      if (funcname) {
-        element.addEventListener('click', (e) => {
-          if (typeof frame.contentWindow[funcname] === "function") {
-            frame.contentWindow[funcname](e.target);
-          }
-        });
-      }
-      element.removeAttribute('onclick');
-    });
   }
 
  	const debounce = v => {

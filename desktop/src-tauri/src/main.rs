@@ -57,7 +57,7 @@ fn lookup(dictid: String, word: String) -> LookupResponse {
     if let Some(dict) = dictdb.get(&dictid) {
         match dict {
             wikit::WikitDictionary::Local(ld) => {
-                if let Ok(v) = ld.lookup(word) {
+                if let Ok(v) = ld.lookup(&word) {
                     for (k, v) in v {
                         mp.insert(k, v);
                     }
@@ -89,6 +89,10 @@ fn lookup(dictid: String, word: String) -> LookupResponse {
     };
     write_file(style.as_bytes(), cssfile.as_path());
     write_file(script.as_bytes(), jsfile.as_path());
+    if let Some(v) = mp.get(&word) {
+        let wordfile = staticdir.join(format!("{staticid}_{word}.html"));
+        write_file(v.as_bytes(), wordfile.as_path());
+    }
 
     let port = INTERNAL_FS_PORT.load(Ordering::SeqCst);
 
@@ -152,10 +156,23 @@ async fn http_file_server() -> Result<()> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    tokio::spawn(async {
+fn async_main() -> Result<()> {
+    use tokio::runtime::Builder;
+
+    let rt = Builder::new_multi_thread()
+        .worker_threads(5)
+        .enable_all()
+        .build()?;
+    rt.block_on(async {
         http_file_server().await.expect("failed to run internal static file server");
+    });
+
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    std::thread::spawn(move || {
+        async_main().expect("start async runtime failed");
     });
 
     let app = tauri::Builder::default()

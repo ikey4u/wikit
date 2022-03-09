@@ -62,7 +62,14 @@
       }
     ],
     "security": {
-      "csp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-inline' 'self' img-src:; script-src http: https: 'unsafe-inline';"
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "font-src": ["https://fonts.gstatic.com"],
+        "img-src": "'self' asset: https://asset.localhost blob: data:",
+        "style-src": "'unsafe-inline' 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net http: https: http://127.0.0.1",
+        "script-src": "'unsafe-inline' 'self' http: https: http://127.0.0.1"
+      },
+      "freezePrototype": true
     }
   }
 }

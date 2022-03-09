@@ -37,7 +37,7 @@ jobs:
       run: |
           npm i
           npm run build
-          cargo install --git https://github.com/tauri-apps/tauri --tag cli.rs v1.0.0-rc.6 tauri-cli
+          cargo install --git https://github.com/tauri-apps/tauri --tag v1.0.0-rc.7 tauri-cli
           cd src-tauri && cargo tauri build
     - name: Archive Linux Production
       if: startsWith(matrix.os,'ubuntu')
