@@ -55,8 +55,8 @@
     "windows": [
       {
         "title": "Wikit Desktop",
-        "width": 1048,
-        "height": 768,
+        "width": 768,
+        "height": 555,
         "resizable": false,
         "fullscreen": false
       }
