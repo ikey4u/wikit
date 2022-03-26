@@ -1,2 +1,2 @@
 [workspace]
-members = [ "cli", "core", "desktop/src-tauri" ]
+members = [ "cli", "core", "desktop/tauri", "desktop/ui"]
