@@ -1,7 +1,11 @@
 *.css linguist-detectable=false
+*.sass linguist-detectable=false
+*.scss linguist-detectable=false
 *.html linguist-detectable=false
 *.vue linguist-detectable=false
 *.js linguist-detectable=false
+*.woff linguist-detectable=false
+*.woff2 linguist-detectable=false
 
 docs/* linguist-documentation
 *.md linguist-documentation

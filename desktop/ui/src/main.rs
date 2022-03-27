@@ -99,6 +99,16 @@ impl Component for App {
                             <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoWordPage) }>{ "Word" }</a>
                             <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoSentencePage) }>{ "Sentence" }</a>
                             <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoFavoritePage) }>{ "Favorite" }</a>
+                            <div class="navbar-item">
+                                <div class="field">
+                                  <p class="control has-icons-left">
+                                    <input class="input is-rounded is-small" type="text" placeholder="Search word ..."/ >
+                                    <span class="icon is-small is-left">
+                                      <i class="bi bi-search"></i>
+                                    </span>
+                                  </p>
+                                </div>
+                            </div>
                         </div>
                         <div class="navbar-end">
                             <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoSettingPage) }>{ "Setting" }</a>
