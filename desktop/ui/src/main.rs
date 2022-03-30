@@ -7,6 +7,7 @@ use pages::PageType;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use gloo::utils::document;
+use web_sys::{KeyboardEvent, EventTarget};
 
 enum AppMsg {
     SendHello,
@@ -15,12 +16,32 @@ enum AppMsg {
     GotoSentencePage,
     GotoFavoritePage,
     GotoSettingPage,
+    OnSearchTextChange(String),
+}
+
+enum Fileds {
+    SearchInput,
+}
+
+impl Fileds {
+    pub fn value(&self) -> String {
+        match self {
+            SearchInput => {
+                dom::get_input_value("search")
+            }
+        }
+    }
 }
 
 struct App {
     name: String,
     msg: String,
+    // current page
     page: PageType,
+    // query keyword
+    input: String,
+    // list of hits of the query keyword
+    fuzzy_list: Vec<String>,
 }
 
 impl Component for App {
@@ -32,6 +53,8 @@ impl Component for App {
             name: "wikit".into(),
             msg: String::new(),
             page: PageType::Word,
+            input: String::new(),
+            fuzzy_list: vec![],
         }
     }
 
@@ -51,6 +74,14 @@ impl Component for App {
                         }
                     }
                 });
+                true
+            }
+            AppMsg::OnSearchTextChange(text) => {
+                if text.len() > 0 {
+                    self.fuzzy_list = (1..100).map(|i| format!("{text}")).collect();
+                } else {
+                    self.fuzzy_list = vec![];
+                }
                 true
             }
             AppMsg::ReceivedMsg(msg) => {
@@ -77,45 +108,100 @@ impl Component for App {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let page = match self.page {
-            PageType::Word => html! {
-                <pages::Word />
-            },
-            PageType::Sentence => html! {
-                <pages::Sentence />
-            },
-            PageType::Favorite => html! {
-                <pages::Favorite />
-            },
-            PageType::Setting => html! {
-                <pages::Setting />
-            },
-        };
         html! {
             <div>
-                <nav class="navbar is-size-7">
-                    <div class="navbar-menu is-active">
+                <nav class="navbar is-size-7 wikit-menu">
+                    <div class="navbar-menu">
                         <div class="navbar-start">
-                            <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoWordPage) }>{ "Word" }</a>
-                            <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoSentencePage) }>{ "Sentence" }</a>
-                            <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoFavoritePage) }>{ "Favorite" }</a>
-                            <div class="navbar-item">
-                                <div class="field">
-                                  <p class="control has-icons-left">
-                                    <input class="input is-rounded is-small" type="text" placeholder="Search word ..."/ >
-                                    <span class="icon is-small is-left">
-                                      <i class="bi bi-search"></i>
+                            <a class="navbar-item is-active has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoWordPage) }>
+                                <div>
+                                  <p>
+                                    <span class="icon is-small is-centered">
+                                      <i class="bi bi-braces"></i>
                                     </span>
                                   </p>
+                                  <p>{ "Word" }</p>
                                 </div>
-                            </div>
+                            </a>
+                            <a class="navbar-item has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoSentencePage) }>
+                                <div>
+                                  <p>
+                                    <span class="icon is-small is-centered">
+                                      <i class="bi bi-braces-asterisk"></i>
+                                    </span>
+                                  </p>
+                                  <p>{ "Sentence" }</p>
+                                </div>
+                            </a>
+                            <a class="navbar-item has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoFavoritePage) }>
+                                <div>
+                                  <p>
+                                    <span class="icon is-small is-centered">
+                                      <i class="bi bi-heart"></i>
+                                    </span>
+                                  </p>
+                                  <p>{ "Favorite" }</p>
+                                </div>
+                            </a>
+                            if self.page != PageType::Setting {
+                                <div class="navbar-item">
+                                    <div class="field">
+                                      <p class="control has-icons-left">
+                                        <input
+                                            class="input is-rounded is-small"
+                                            autocomplete="none" autocorrect="off" autocapitalize="none"
+                                            type="text"
+                                            id="search"
+                                            onkeyup={
+                                                ctx.link().callback(|_| {
+                                                    AppMsg::OnSearchTextChange(Fileds::SearchInput.value())
+                                                })
+                                            }
+                                        />
+                                        <span class="icon is-small is-left">
+                                          <i class="bi bi-search"></i>
+                                        </span>
+                                      </p>
+                                    </div>
+                                </div>
+                            }
                         </div>
                         <div class="navbar-end">
-                            <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GotoSettingPage) }>{ "Setting" }</a>
+                            <a class="navbar-item has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoSettingPage) }>
+                                <div>
+                                  <p>
+                                    <span class="icon is-small is-centered">
+                                      <i class="bi bi-gear"></i>
+                                    </span>
+                                  </p>
+                                  <p>{ "Setting" }</p>
+                                </div>
+                            </a>
                         </div>
                     </div>
                 </nav>
-                { page }
+                <div class="columns is-mobile">
+                    if self.fuzzy_list.len() > 0 {
+                        <div class="column is-one-fifth wikit-list">
+                          {
+                              self.fuzzy_list.clone().into_iter().map(|item| {
+                                  html!{
+                                    <div>
+                                        { item }
+                                    </div>
+                                  }
+                              }).collect::<Html>()
+                          }
+                        </div>
+                    }
+                    <div class="column with-wikit-body-height">
+                        <div class="section">
+                        </div>
+                        <div class="section">
+                            { self.page.html() }
+                        </div>
+                    </div>
+                </div>
             </div>
         }
     }

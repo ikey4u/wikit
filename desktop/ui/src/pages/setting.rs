@@ -21,6 +21,7 @@ impl Component for Setting {
         html! {
             <section class="section">
                 <div class="field is-grouped">
+                    <p>{ "TODO: Setting Page" }</p>
                 </div>
             </section>
         }

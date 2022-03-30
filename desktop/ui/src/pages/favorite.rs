@@ -20,16 +20,7 @@ impl Component for Favorite {
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <section class="section">
-                <div class="field is-grouped">
-                    <p class="control is-expanded">
-                        <input class="input" type="text" placeholder="Search favorite ..." />
-                    </p>
-                    <p class="control">
-                        <a class="button is-light">
-                            { "Search" }
-                        </a>
-                    </p>
-                </div>
+                <p>{ "TODO: Favorite Page" }</p>
             </section>
         }
     }
