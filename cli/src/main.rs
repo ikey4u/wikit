@@ -5,6 +5,7 @@ use wikit_core::reader;
 use wikit_core::util;
 use wikit_core::elog;
 use wikit_core::wikit;
+use wikit_core::preview;
 use wikit_core::error::{AnyResult, Context};
 
 use std::path::Path;
@@ -13,6 +14,7 @@ use std::fs::File;
 
 use clap::{Arg, App, SubCommand, AppSettings, value_t_or_exit};
 use serde::Deserialize;
+use indoc::indoc;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -49,6 +51,7 @@ enum ResourceFormat {
     MDX,
     POSTGRES,
     MACDICT,
+    SQLITE,
 }
 
 impl ResourceFormat {
@@ -60,6 +63,7 @@ impl ResourceFormat {
                 Some("txt") | Some("TXT") => Some(ResourceFormat::TEXT),
                 Some("mdx") | Some("MDX") => Some(ResourceFormat::MDX),
                 Some("wikit") | Some("WIKIT") => Some(ResourceFormat::WIKIT),
+                Some("sqlite") => Some(ResourceFormat::SQLITE),
                 Some("dictionary") => Some(ResourceFormat::MACDICT),
                 _ => None
             }
@@ -103,7 +107,12 @@ async fn main() -> AnyResult<()> {
                 .takes_value(true)
             )
             .arg(Arg::with_name("input")
-                .help("The input file format depends on the value. File suffix reflects the format, for example .txt => text, .mdx => mdx, .wikit => wikit, .dictionary => macos dictionary. If the value is a database url such as postgresql://user@localhost:5432/dictdb, then the input is a database")
+                .help(indoc!{"
+                    The input file format depends on the value. File suffix reflects the format,
+                    for example .txt => text, .mdx => mdx, .wikit => wikit, .dictionary => macos dictionary, .sqlite =>
+                    sqlite database. If the value is a database url such as postgresql://user@localhost:5432/dictdb,
+                    then the input is a database. Otherwise, the input is treated as a wikit dictionary source directory.
+                "})
                 .required(true)
                 .index(1)
             )
@@ -118,6 +127,18 @@ async fn main() -> AnyResult<()> {
                 .short("-s")
                 .long("--start")
                 .takes_value(false)
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("preview")
+            .setting(AppSettings::ArgRequiredElseHelp)
+            .setting(AppSettings::ColoredHelp)
+            .about("preview wikit source file")
+            .arg(Arg::with_name("directory")
+                .help("path to root directory of wikit source")
+                .short("-d")
+                .long("--directory")
+                .takes_value(true)
             )
         )
         .get_matches();
@@ -192,6 +213,33 @@ async fn main() -> AnyResult<()> {
                         let pairs = mdict::parse_mdx(input.as_str(), None)?;
                         mdict::save_into_db(pairs, &output, table).await?;
                     }
+                    // convert `.wikit.txt` source file into sqlite database
+                    (ResourceFormat::TEXT, ResourceFormat::SQLITE) => {
+                        if input.ends_with(".wikit.txt") {
+                            let db = rusqlite::Connection::open(&output)?;
+                            db.execute(
+                                "CREATE TABLE IF NOT EXISTS wikit (
+                                word TEXT PRIMARY KEY,
+                                meaning TEXT NOT NULL
+                                )",
+                                [],
+                            )?;
+
+                            let file = File::open(Path::new(&input)).context(elog!("Cannot open {:?}", input))?;
+                            let wikitsrc = reader::WikitSource::new(file);
+
+                            for item in wikitsrc {
+                                if item.header.name.len() > 0 {
+                                    db.execute(
+                                        "INSERT OR REPLACE INTO wikit (word, meaning) VALUES (?1, ?2)",
+                                        rusqlite::params![item.header.name, item.body],
+                                    )?;
+                                }
+                            }
+                        } else {
+                            println!("the source file is not wikit source file");
+                        }
+                    }
                     (ResourceFormat::MDX | ResourceFormat::TEXT, ResourceFormat::WIKIT) => {
                         let outfile = Path::new(&output);
                         let outfile = wikit::LocalDictionary::create(&input, Some(outfile))
@@ -207,6 +255,12 @@ async fn main() -> AnyResult<()> {
             }
 
         }
+    }
+
+    if let Some(cmd) = matches.subcommand_matches("preview") {
+        let dir = value_t_or_exit!(cmd.value_of("directory"), String);
+        // let previewer = preview::Previewer::new(dir)?;
+        // previewer.run().await?;
     }
 
     if let Some(server) = matches.subcommand_matches("server") {

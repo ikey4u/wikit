@@ -12,3 +12,5 @@ serde = "1.0"
 serde_derive = "1.0"
 rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "91e3b4397a1637d0f55f23db712cf7bda0c7f891" }
 anyhow = "1.0.38"
+rusqlite = { version = "0.27.0", features = ["bundled"] }
+indoc = "1.0.4"

@@ -7,6 +7,7 @@ use std::{sync::Mutex, collections::HashMap};
 use std::path::Path;
 use std::sync::Arc;
 use anyhow::{Context, Result};
+use tokio::sync::broadcast::{self, Sender, Receiver};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::atomic::{AtomicU16, Ordering};
@@ -15,6 +16,7 @@ use wikit_core::config;
 use wikit_core::crypto;
 use wikit_core::wikit;
 use wikit_core::util;
+use wikit_core::preview;
 use wikit_core::wikit::WikitDictionary;
 use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, Manager};
 use tauri::api::dialog;
@@ -23,11 +25,69 @@ use once_cell::sync::Lazy;
 static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(|| {
     Arc::new(Mutex::new(HashMap::new()))
 });
-
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
 // internal static file server port
 static INTERNAL_FS_PORT: AtomicU16 = AtomicU16::new(7561);
+pub type FFIResult<T> = Result<T, String>;
+
+struct WikitState {
+    shutdown_previewer: Sender<()>,
+    is_previewer_started: Arc<Mutex<bool>>,
+}
+
+impl WikitState {
+    pub fn new() -> Self {
+        let (tx, _) = broadcast::channel(1);
+        Self {
+            shutdown_previewer: tx,
+            is_previewer_started: Arc::new(Mutex::new(false)),
+        }
+    }
+
+    fn is_previewer_started(&self) -> bool {
+        if let Ok(started) = self.is_previewer_started.lock() {
+            *started
+        } else {
+            false
+        }
+    }
+
+    fn mark_previewer_started(&self) {
+        if let Ok(mut v) = self.is_previewer_started.lock() {
+            *v = true
+        }
+    }
+
+    fn mark_previewer_stopped(&self) {
+        if let Ok(mut v) = self.is_previewer_started.lock() {
+            *v = false
+        }
+    }
+
+    fn stop_previewer_jobs(&self) {
+        if let Ok(_) = self.shutdown_previewer.send(()) {
+            self.mark_previewer_stopped()
+        }
+    }
+
+    async fn start_previewer(&self, dir: String) -> Result<(), String> {
+        if self.is_previewer_started() {
+            return Ok(())
+        }
+
+        let rx = self.shutdown_previewer.subscribe();
+        let previewer = preview::Previewer::new(dir)?;
+
+        self.mark_previewer_started();
+        if let Err(e) = Arc::new(previewer).run(rx).await {
+            self.stop_previewer_jobs();
+            println!("previewer server exit with error: {e:?}");
+            return Err(format!("{e:?}"));
+        };
+
+        Ok(())
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct LookupResponse {
@@ -50,7 +110,23 @@ impl LookupResponse {
 }
 
 #[tauri::command]
-fn ffi_hello(name: String) -> Result<String, String> {
+async fn start_preview_server(state: tauri::State<'_, WikitState>, dir: String) -> FFIResult<()> {
+    state.start_previewer(dir).await
+}
+
+#[tauri::command]
+async fn stop_preview_server(state: tauri::State<'_, WikitState>) -> FFIResult<()> {
+    state.stop_previewer_jobs();
+    Ok(())
+}
+
+#[tauri::command]
+async fn is_preview_server_up(state: tauri::State<'_, WikitState>) -> FFIResult<bool> {
+    Ok(state.is_previewer_started())
+}
+
+#[tauri::command]
+fn ffi_hello(name: String) -> FFIResult<String> {
     if name.len() == 0 {
         Err("name is empty".into())
     } else {
@@ -185,6 +261,7 @@ fn main() -> Result<()> {
     });
 
     let app = tauri::Builder::default()
+        .manage(WikitState::new())
         .menu(get_menu())
         .setup(|app| {
             let window = app.get_window("main").unwrap();
@@ -237,7 +314,14 @@ fn main() -> Result<()> {
               window_.emit("rust-event", Some(reply)).expect("failed to emit");
           });
         })
-        .invoke_handler(tauri::generate_handler![lookup, get_dict_list, ffi_hello])
+        .invoke_handler(tauri::generate_handler![
+            lookup,
+            get_dict_list,
+            ffi_hello,
+            start_preview_server,
+            stop_preview_server,
+            is_preview_server_up,
+        ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 

@@ -18,10 +18,25 @@ impl Component for Word {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let page = format!(r#"
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="UTF-8" />
+                <script type="text/javascript"> {script} </script>
+                <style type="text/css" media="screen"> {style} </style>
+              </head>
+              <body>
+                {body}
+              </body>
+            </html>
+        "#,
+            script = "",
+            style = "",
+            body = "",
+        );
         html! {
-            <section class="section">
-                <p>{ "TODO: Word Page" }</p>
-            </section>
+            <iframe title="dictview" srcdoc={page} style="width: 100%; height: 100vh;"></iframe>
         }
     }
 }

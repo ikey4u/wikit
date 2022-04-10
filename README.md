@@ -1,5 +1,7 @@
 # Wikit - A universal dictionary
 
+*THESE CODES ARE UNDER HEAVY REFACTOR, THEY MAY NOT WORK AS EXPECTED*
+
 # What is it?
 
 To be short, Wikit is a dictionary suite for human in [FOSS](https://en.wikipedia.org/wiki/Free_and_open-source_software) style.
@@ -30,67 +32,146 @@ You can download them from [Release](https://github.com/ikey4u/wikit/releases) p
 
 ## Creating dictionary
 
-You can use wikit CLI to create wikit dictionary from text file, each word-meaning item of the text
-file holds **three** lines and should follow this format
+- Prepare your dictionary
 
-```
-word
-meaning
-</>
-```
+    Assume that your dictionary source is put under directory `my_awesome_dict`, it should meet the
+    following organization
 
-`word` is keyword of your dictionary, it can be a single word like `cat`, `dog` or a phrase
-like `a lot of`, `never mind`. If `word` is long, it should be wrapped and put in one line.
+        my_awesome_dict/
+        +-- audios/
 
-`meaning` is your explanation for your `word`, it can be any valid html content. if `meaning` is
-long, it should be wrapped and put in one line. This constraint may be removed in future.
+            optional, any audios should be put here
 
-`</>` is an end marker, write it in a single line
+        +-- images/
 
-Here is an example
+            optional, any images should be put here
 
-```
-cat
-<div class="meaning"> <h2>cat</h2> cat is an animal </div>
-</>
+        +-- header.wikit.txt
 
-dog
-<div class="meaning"> <h2>dog</h2> dog is an animal </div>
-</>
-```
+            required, this is the header of your dictionary. It contains basic information,
+            style, script for your dictionary.
 
-Let's assume the content above is saved as a file `/path/to/dict/dict.txt`, then 
-you can run the following command to create wikit dictionary
+        +-- body.wikit.txt
 
-    wikit dict --create -o dict.wikit /path/to/dict/dict.txt
+            required, this is the body (words and meanings) of your dictionary
 
-wikit also supports css style and javascript to decorate your `meaning`, you can organize your
-dictionary related files as below
+        +-- preview.wikit.txt
 
-    dict/
-    +-- dict.txt
-    +-- dict.css
-    +-- dict.js
-    +-- dict.toml
+            optional, preview item in your dictionary
 
-As you can see, your css and js file name must be the same with your dictionary source file.
-The `dict.toml` file is used to provid some basic information for your dictionary, here is an example
+    Text file with `.wikit.txt` suffix has specific format:
 
-    name = "wikit example dictionary"
+        (
+            <PARAMS>
+        ) {
+            <CONTENT>
+        }
 
-    desc = '''
-    This is just a wikit example dictionary, nothing more.
-    '''
+    If you have experiences with mainstream programming language such as C/C++, Python,
+    JavaScript, you may feel familiar with the format. It likes a function definition but without
+    function name. wikit has extended the style, the `<PARAMS>` is a `json5` body with 
+    following keys required:
 
-    author = "wikit author"
+    - `name`: This entry name
+    - `type`: This entry type
+    - `mime`: The content type of this entry, a subset from [HTTP MIME](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types)
 
-`dict.css`, `dict.js` and `dict.toml` are all optional, provide only when you need them.
+    Note that the format is strict, each of the following line must hold one single line and have no prefix
+    spaces:
 
-A full example can be found at [wikit/examples/dict](https://github.com/ikey4u/wikit/tree/master/examples/dict).
+        (
+        ) {
+        }
 
-What's more, wikit also support you create wikit dictionary directly from MDX file as below
+    And more, `<PARAMS>` and `<CONTENT>` must have a indent of zero or 4 more spaces.
 
-    wikit dict --create -o /path/to/dict.wikit /path/to/dict.mdx
+    <details>
+
+    <summary>Here is a brief example, click to expand.</summary>
+
+    - `header.wikit.txt`
+
+        ```
+        (
+            "name": "wikit example dictionary",
+            "type": "info",
+            "mime": "application/toml",
+        ) {
+            desc = '''
+            This is just a wikit example dictionary, nothing more.
+            '''
+
+            author = "wikit author"
+        }
+
+        (
+            "type": "js",
+            "name": "script.js",
+            "mime": "text/javascript",
+        ) {
+            // put your js script here
+        }
+
+
+        (
+            "type": "css",
+            "name": "style.css",
+            "mime": "text/css",
+        ) {
+            /* put you css style here */
+        }
+        ```
+
+    - `body.wikit.txt`
+
+        ```
+        (
+            "type": "word",
+            "name": "cat",
+            "mime": "text/html",
+        ) {
+            <div class="meaning">
+              <h2>cat</h2>
+            </div>
+        }
+        ```
+
+    - `preview.wikit.txt`
+
+        ```
+        (
+            "type": "word",
+            "name": "cat",
+            "mime": "text/html",
+        ) {
+            <div class="meaning">
+              <h2>cat</h2>
+            </div>
+        }
+        ```
+
+    A full example can be found at [wikit/examples/dict](https://github.com/ikey4u/wikit/tree/master/examples/dict).
+
+    </details>
+
+- Preview your dictionary
+
+    Add words you want to preview into `preview.wikit.txt`, and run the following command
+
+        wikit preview /path/to/my_awesome_dict
+
+- Build your dictionary
+
+    Congratulations! After some hard work, you have prepared your dictionary. Its time to build,
+    just run the following command and your are done
+
+        wikit dict --create -o dict.wikit /path/to/my_awesome_dict
+
+- Bonus
+
+    What's more, wikit also support you create wikit dictionary directly from MDX file as below
+
+        wikit dict --create -o /path/to/dict.wikit /path/to/dict.mdx
 
 ## Configuring dictionary
 
@@ -135,6 +216,11 @@ Everything is done, open `Wikit Desktop` and start to lookup.
 If you add, delete or change the wikit dictionary, remember to restart `Wikit Desktop`.
 
 # Developement
+
+Install yew related tools
+
+    rustup target add wasm32-unknown-unknown
+    cargo install trunk wasm-bindgen-cli
 
 Install tauri-cli
 

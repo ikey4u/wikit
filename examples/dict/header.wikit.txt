@@ -1,0 +1,82 @@
+(
+    "name": "wikit example dictionary",
+    "type": "info",
+    "mime": "application/toml",
+) {
+    desc = '''
+    This is just a wikit example dictionary, nothing more.
+    '''
+
+    author = "wikit author"
+}
+
+(
+    "type": "js",
+    "name": "script.js",
+    "mime": "text/javascript",
+) {
+    // style and script are modified from https://www.w3schools.com/tags/att_button_name.asp
+    function opentab(tabButton, tabContentID) {
+      // Reset tab button and content to default style
+      for (btn of document.getElementsByClassName("tabbtn")) {
+            btn.className = "tabbtn";
+      }
+      for (content of document.getElementsByClassName("tabcontent")) {
+            content.className = "tabcontent";
+            content.style.display = "none";
+      }
+
+      // active current tab button
+      tabButton.className = "tabbtn active";
+
+      // active current tab content
+      let tabContent = document.getElementById(tabContentID);
+      if (tabContent) {
+        tabContent.style.display = "block";
+        tabContent.className = "tabcontent active";
+      }
+    }
+}
+
+(
+    "type": "css",
+    "name": "style.css",
+    "mime": "text/css",
+) {
+    /* style and script are modified from https://www.w3schools.com/tags/att_button_name.asp */
+    .tabcontent {
+      display: none;
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      border-top: none;
+    }
+
+    .tab {
+      overflow: hidden;
+      border: 1px solid #ccc;
+      background-color: #f1f1f1;
+    }
+
+    .tab button {
+      background-color: inherit;
+      float: left;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      transition: 0.3s;
+      font-size: 17px;
+    }
+
+    .tab button:hover {
+      background-color: #ddd;
+    }
+
+    .tab button.active {
+      background-color: #ccc;
+    }
+
+    .tabcontent.active {
+      display: block;
+    }
+}

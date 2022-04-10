@@ -3,11 +3,13 @@ mod pages;
 mod dom;
 
 use pages::PageType;
+use ffi::FFIResult;
 
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use gloo::utils::document;
 use web_sys::{KeyboardEvent, EventTarget};
+use wasm_bindgen::JsValue;
 
 enum AppMsg {
     SendHello,
@@ -17,6 +19,7 @@ enum AppMsg {
     GotoFavoritePage,
     GotoSettingPage,
     OnSearchTextChange(String),
+    GoToEditorPage,
 }
 
 enum Fileds {
@@ -42,6 +45,8 @@ struct App {
     input: String,
     // list of hits of the query keyword
     fuzzy_list: Vec<String>,
+    current_dictionary: String,
+    dictionary_list: Vec<String>,
 }
 
 impl Component for App {
@@ -55,6 +60,8 @@ impl Component for App {
             page: PageType::Word,
             input: String::new(),
             fuzzy_list: vec![],
+            current_dictionary: "".into(),
+            dictionary_list: vec![],
         }
     }
 
@@ -77,7 +84,7 @@ impl Component for App {
                 true
             }
             AppMsg::OnSearchTextChange(text) => {
-                if text.len() > 0 {
+                if text.trim().len() > 0 {
                     self.fuzzy_list = (1..100).map(|i| format!("{text}")).collect();
                 } else {
                     self.fuzzy_list = vec![];
@@ -104,16 +111,42 @@ impl Component for App {
                 self.page = PageType::Setting;
                 true
             }
+            AppMsg::GoToEditorPage => {
+                spawn_local(async {
+                    async fn start_preview_server() -> FFIResult<()> {
+                        let sourcedir = ffi::open().await?
+                            .as_string()
+                            .ok_or(JsValue::from_str("failed to get source dir"))?;
+                        ffi::start_preview_server(sourcedir).await?;
+                        Ok(())
+                    }
+                    if let Err(e) = start_preview_server().await {
+                        log::error!("failed to start preview server: {:?}", e);
+                        return;
+                    }
+                    log::info!("server is started");
+                });
+                // TODO(2022-04-10): toggle to preview page only when live server is up
+                self.page = PageType::Editor;
+                true
+            }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let fouces_menu_class = |typ: PageType| {
+            if self.page == typ {
+                "navbar-item is-active has-text-centered has-text-link"
+            } else {
+                "navbar-item is-active has-text-centered"
+            }
+        };
         html! {
             <div>
                 <nav class="navbar is-size-7 wikit-menu">
                     <div class="navbar-menu">
                         <div class="navbar-start">
-                            <a class="navbar-item is-active has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoWordPage) }>
+                            <a class={ fouces_menu_class(PageType::Word) } onclick={ ctx.link().callback(|_| AppMsg::GotoWordPage) }>
                                 <div>
                                   <p>
                                     <span class="icon is-small is-centered">
@@ -123,7 +156,20 @@ impl Component for App {
                                   <p>{ "Word" }</p>
                                 </div>
                             </a>
-                            <a class="navbar-item has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoSentencePage) }>
+                            <div class="navbar-item has-dropdown is-hoverable">
+                                <a class="navbar-link">
+                                    { "Advanced" }
+                                </a>
+                                <div class="navbar-dropdown">
+                                    <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GoToEditorPage) }>
+                                        { "Editor Preview" }
+                                    </a>
+                                    <a class="navbar-item is-hidden-mobile">
+                                        { "Converter" }
+                                    </a>
+                                </div>
+                            </div>
+                            <a class="navbar-item has-text-centered is-hidden-mobile" onclick={ ctx.link().callback(|_| AppMsg::GotoSentencePage) }>
                                 <div>
                                   <p>
                                     <span class="icon is-small is-centered">
@@ -133,7 +179,7 @@ impl Component for App {
                                   <p>{ "Sentence" }</p>
                                 </div>
                             </a>
-                            <a class="navbar-item has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoFavoritePage) }>
+                            <a class="navbar-item has-text-centered is-hidden-mobile" onclick={ ctx.link().callback(|_| AppMsg::GotoFavoritePage) }>
                                 <div>
                                   <p>
                                     <span class="icon is-small is-centered">
@@ -143,31 +189,53 @@ impl Component for App {
                                   <p>{ "Favorite" }</p>
                                 </div>
                             </a>
-                            if self.page != PageType::Setting {
+                            if self.page == PageType::Word {
                                 <div class="navbar-item">
-                                    <div class="field">
-                                      <p class="control has-icons-left">
-                                        <input
-                                            class="input is-rounded is-small"
-                                            autocomplete="none" autocorrect="off" autocapitalize="none"
-                                            type="text"
-                                            id="search"
-                                            onkeyup={
-                                                ctx.link().callback(|_| {
-                                                    AppMsg::OnSearchTextChange(Fileds::SearchInput.value())
-                                                })
-                                            }
-                                        />
-                                        <span class="icon is-small is-left">
-                                          <i class="bi bi-search"></i>
+                                    <div class="field has-addons">
+                                      <p class="control">
+                                        <span class="select is-rounded is-small">
+                                          <select>
+                                            <option>{ "Oxford" }</option>
+                                            <option>{ "剑桥词典" }</option>
+                                            <option>{ "韦氏词典" }</option>
+                                            <option>{ "添加词典" }</option>
+                                          </select>
                                         </span>
                                       </p>
+                                          <p class="control has-icons-left is-expanded">
+                                            <input
+                                                class="input is-rounded is-small"
+                                                autocomplete="none" autocorrect="off" autocapitalize="none"
+                                                type="text"
+                                                id="search"
+                                                onkeyup={
+                                                    ctx.link().callback(|_| {
+                                                        AppMsg::OnSearchTextChange(Fileds::SearchInput.value())
+                                                    })
+                                                }
+                                            />
+                                            <span class="icon is-small is-left">
+                                              <i class="bi bi-search"></i>
+                                            </span>
+                                          </p>
+                                    </div>
+                                </div>
+                            }
+                            if self.page == PageType::Editor {
+                                <div class="navbar-item">
+                                    <div class="buttons">
+                                        <a class="button is-primary is-small">
+                                            <strong>{ "Start" }</strong>
+                                        </a>
+                                        <a class="button is-black is-small">
+                                            <strong>{ "Stop" }</strong>
+                                        </a>
                                     </div>
                                 </div>
                             }
                         </div>
                         <div class="navbar-end">
-                            <a class="navbar-item has-text-centered" onclick={ ctx.link().callback(|_| AppMsg::GotoSettingPage) }>
+                            <a class={ fouces_menu_class(PageType::Setting) } onclick={ ctx.link().callback(|_| AppMsg::GotoSettingPage) }>
                                 <div>
                                   <p>
                                     <span class="icon is-small is-centered">
@@ -181,7 +249,7 @@ impl Component for App {
                     </div>
                 </nav>
                 <div class="columns is-mobile">
-                    if self.fuzzy_list.len() > 0 {
+                    if self.fuzzy_list.len() > 0  && self.page == PageType::Word {
                         <div class="column is-one-fifth wikit-list">
                           {
                               self.fuzzy_list.clone().into_iter().map(|item| {
@@ -195,9 +263,7 @@ impl Component for App {
                         </div>
                     }
                     <div class="column with-wikit-body-height">
-                        <div class="section">
-                        </div>
-                        <div class="section">
+                        <div class="container">
                             { self.page.html() }
                         </div>
                     </div>

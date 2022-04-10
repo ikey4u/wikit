@@ -37,10 +37,18 @@ pub enum WikitError {
 
     #[error("Reqwest Error")]
     ReqwestError(#[from] reqwest::Error),
+
+    #[error("json5 error")]
+    JSON5Error(#[from] json5::Error),
+
+    #[error("{0}")]
+    SQLiteError(#[from] rusqlite::Error),
 }
 
+// TODO(2022-04-04): refactor out WikitResult<T> and use Result<T>
 pub type WikitResult<T> = std::result::Result<T, WikitError>;
-pub type NomResult<'a, O> = AnyResult<(&'a [u8], O), nom::Err<WikitError>>;
+pub type NomResult<'a, O> = std::result::Result<(&'a [u8], O), nom::Err<WikitError>>;
+pub type Result<T> = std::result::Result<T, WikitError>;
 
 impl WikitError {
     pub fn new<S>(msg: S) -> Self where S: AsRef<str> {
@@ -61,5 +69,11 @@ impl<I> ParseError<I> for WikitError {
 impl<I> FromExternalError<I, anyhow::Error> for WikitError {
     fn from_external_error(_input: I, _kind: ErrorKind, e: anyhow::Error) -> Self {
         WikitError::Anyhow(e)
+    }
+}
+// Convert WikitError into string which is useful for passing error from rust into js
+impl From<WikitError> for String {
+    fn from(e: WikitError) -> Self {
+        format!("{:?}", e)
     }
 }

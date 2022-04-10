@@ -36,6 +36,13 @@ url = "2.2.2"
 md-5 = "0.9.1"
 hex = "0.4"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
+json5 = "0.4.1"
+tokio = { version = "1.0", features = ["full"] }
+axum = { version = "0.5" }
+tower-http = { version = "0.2.0", features = ["fs"] }
+tempfile = "3"
+rusqlite = { version = "0.27.0", features = ["bundled"] }
+notify = "4.0"
 
 [dependencies.nom]
 version = "6"

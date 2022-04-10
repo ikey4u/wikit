@@ -2,11 +2,13 @@ mod word;
 mod sentence;
 mod favorite;
 mod setting;
+mod editor;
 
 pub use word::Word;
 pub use sentence::Sentence;
 pub use favorite::Favorite;
 pub use setting::Setting;
+pub use editor::Editor;
 
 use yew::prelude::*;
 
@@ -16,6 +18,7 @@ pub enum PageType {
     Sentence,
     Favorite,
     Setting,
+    Editor,
 }
 
 impl PageType {
@@ -32,6 +35,9 @@ impl PageType {
             },
             PageType::Setting => html! {
                 <Setting />
+            },
+            PageType::Editor => html! {
+                <Editor />
             },
         }
     }
