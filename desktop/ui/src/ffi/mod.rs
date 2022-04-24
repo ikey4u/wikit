@@ -1,5 +1,4 @@
 use wasm_bindgen::prelude::*;
-use anyhow::Result;
 
 pub type FFIResult<T> = anyhow::Result<T, JsValue>;
 
@@ -13,6 +12,9 @@ extern "C" {
 
     #[wasm_bindgen(js_name = stopPreviewServer, catch)]
     pub async fn stop_preview_server() -> FFIResult<JsValue>;
+
+    #[wasm_bindgen(js_name = isPreviewServerUp, catch)]
+    pub async fn is_preview_server_up() -> FFIResult<JsValue>;
 
     #[wasm_bindgen(js_name = open, catch)]
     pub async fn open() -> FFIResult<JsValue>;

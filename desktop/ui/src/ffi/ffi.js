@@ -16,3 +16,7 @@ export async function stopPreviewServer() {
 export async function open() {
     return await tauri.dialog.open({ directory: true });
 }
+
+export async function isPreviewServerUp() {
+  return await invoke("is_preview_server_up")
+}

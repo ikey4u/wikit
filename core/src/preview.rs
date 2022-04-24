@@ -3,7 +3,7 @@ use crate::reader::WikitSource;
 
 use std::cell::{Cell, RefCell};
 use std::{path::{Path, PathBuf}, fs};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::mpsc::channel;
 use std::fs::File;
 use std::collections::HashMap;
@@ -11,26 +11,39 @@ use std::collections::HashMap;
 use axum::{
     body::Full,
     response::{self, Html, Response, IntoResponse},
-    http::{StatusCode, Uri},
+    http::{StatusCode, Uri, Method},
     routing::get_service,
     Router,
     routing,
     handler::Handler,
-    extract::Extension,
+    extract::{
+        Extension,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        TypedHeader,
+    },
 };
 use std::net::SocketAddr;
 use tower_http::services::ServeDir;
 use tokio::runtime::Builder;
+use tokio::sync::Mutex;
 use tokio::signal;
 use tokio::sync::broadcast::{self, Sender, Receiver};
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 use notify::{Watcher, DebouncedEvent};
+use tower_http::cors::{Any, CorsLayer};
+use tower::ServiceBuilder;
+
+#[derive(Debug)]
+pub struct PreviewerState {
+    db: rusqlite::Connection,
+    wss: Option<WebSocket>,
+}
 
 pub struct Previewer {
     watchdir: PathBuf,
     svrdir: PathBuf,
-    db: Arc<Mutex<rusqlite::Connection>>,
+    state: Arc<Mutex<PreviewerState>>,
 }
 
 impl Previewer {
@@ -50,7 +63,10 @@ impl Previewer {
         Ok(Self {
             watchdir: watchdir.as_ref().into(),
             svrdir,
-            db: Arc::new(Mutex::new(db)),
+            state: Arc::new(Mutex::new(PreviewerState {
+                db: db,
+                wss: None,
+            }))
         })
     }
 
@@ -81,9 +97,9 @@ impl Previewer {
         };
     }
 
-    async fn index(Extension(db): Extension<Arc<Mutex<rusqlite::Connection>>>) -> impl IntoResponse {
-        let db = db.lock().unwrap();
-        let mut stmt = db.prepare(
+    async fn index(Extension(state): Extension<Arc<Mutex<PreviewerState>>>) -> impl IntoResponse {
+        let state = state.lock().await;
+        let mut stmt = state.db.prepare(
             "SELECT resource, size FROM preview where router = '/words'",
         ).unwrap();
         let mut rows = stmt.query([]).unwrap();
@@ -112,13 +128,13 @@ impl Previewer {
             .unwrap()
     }
 
-    async fn resources(Extension(db): Extension<Arc<Mutex<rusqlite::Connection>>>, uri: Uri) -> impl IntoResponse {
+    async fn resources(Extension(state): Extension<Arc<Mutex<PreviewerState>>>, uri: Uri) -> impl IntoResponse {
         (StatusCode::NOT_FOUND, format!("No route for: {uri}"))
     }
 
     // Write changes of dictionary source into database
     async fn producer(&self) -> Result<()> {
-        fn update(wikit_source_dir: PathBuf, db: Arc<Mutex<rusqlite::Connection>>) -> Result<()> {
+        fn update(wikit_source_dir: PathBuf, db: &rusqlite::Connection) -> Result<()> {
             let header_html = {
                 let header_file = wikit_source_dir.join("header.wikit.txt");
                 let mut mp = HashMap::new();
@@ -157,8 +173,7 @@ impl Previewer {
 
             let html = format!("<html>{}{}</html>", header_html, body_html);
             {
-                // TODO(2022-04-10): remove unwrap
-                db.lock().unwrap().execute(
+                db.execute(
                     "INSERT OR REPLACE INTO preview (router, resource, size) VALUES (?1, ?2, ?3)",
                     rusqlite::params![
                         "/words",
@@ -171,30 +186,73 @@ impl Previewer {
             Ok(())
         }
 
-        update(self.watchdir.clone(), self.db.clone())?;
+        // initialize updatding, do it in a block to avoid deadlock
+        {
+            let state = self.state.lock().await;
+            update(self.watchdir.clone(), &state.db)?;
+        }
+
         let (tx, rx) = channel();
         let mut watcher = notify::watcher(tx, Duration::from_millis(16)).unwrap();
         watcher.watch(self.watchdir.clone(), notify::RecursiveMode::Recursive).unwrap();
         loop {
-            match rx.recv() {
+            // rx is not `Send`, we should own the received value
+            let path = match rx.recv() {
                 Ok(DebouncedEvent::Write(path)) => {
-                    println!("write file: {}", path.display());
-                    update(self.watchdir.clone(), self.db.clone())?;
+                    Some(path.to_owned())
                 }
-                Ok(_) => {}
-                Err(e) => {
-                    println!("watch error: {:?}", e);
+                _ => None
+            };
+            // TODO(2022-04-25): filter out changed files
+            if let Some(_) = path {
+                let mut state = self.state.lock().await;
+                update(self.watchdir.clone(), &state.db)?;
+                if let Some(socket) = state.wss.as_mut() {
+                    let _ = socket.send(Message::Text("CMD:RELOAD".into())).await;
                 }
             }
         }
     }
 
+    async fn wss(
+        Extension(state): Extension<Arc<Mutex<PreviewerState>>>,
+        ws: WebSocketUpgrade,
+        user_agent: Option<TypedHeader<headers::UserAgent>>,
+    ) -> impl IntoResponse {
+        ws.on_upgrade(move |mut socket: WebSocket| {
+            async move {
+                if let Some(Ok(Message::Text(msg))) = socket.recv().await {
+                    match msg.as_str() {
+                        "WIKIT_PREVIEWER_CONNECT" => {
+                            if socket.send(Message::Text("STATUS:CONNECTED".into())).await.is_err() {
+                                println!("failed to send response to websocket client");
+                            }
+                            // initialize the websocket connection
+                            let mut state = state.lock().await;
+                            state.wss = Some(socket);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        })
+    }
+
     // Listen and read database resource according to requested uri
     async fn consumer(&self, shutdown_rx: Receiver<()>) -> Result<()> {
+        // TODO(2022-04-23): refine cors control
+        let cors = CorsLayer::new()
+            .allow_methods(vec![Method::GET, Method::POST])
+            .allow_origin(Any);
         let app = Router::new()
             .route("/", routing::get(Self::index))
+            .route("/wss", routing::get(Self::wss))
             .fallback(Self::resources.into_service())
-            .layer(Extension(self.db.clone()));
+            .layer(
+                ServiceBuilder::new()
+                    .layer(cors)
+                    .layer(Extension(self.state.clone()))
+            );
         let addr = SocketAddr::from(([127, 0, 0, 1], 8088));
         let server = axum::Server::bind(&addr)
             .tcp_nodelay(true)

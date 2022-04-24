@@ -2,13 +2,17 @@ mod ffi;
 mod pages;
 mod dom;
 
+use std::time::Duration;
+
 use pages::PageType;
 use ffi::FFIResult;
 
-use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use gloo::utils::document;
+use gloo::timers;
+use gloo::net::http;
 use web_sys::{KeyboardEvent, EventTarget};
+use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::JsValue;
 
 enum AppMsg {
@@ -20,6 +24,7 @@ enum AppMsg {
     GotoSettingPage,
     OnSearchTextChange(String),
     GoToEditorPage,
+    StartPreviewer,
 }
 
 enum Fileds {
@@ -77,7 +82,7 @@ impl Component for App {
                             link.send_message(AppMsg::ReceivedMsg(msg));
                         }
                         Err(e) => {
-                            log::info!("failed to get message: {:?}", e);
+                            log::error!("failed to get message: {:?}", e);
                         }
                     }
                 });
@@ -112,8 +117,18 @@ impl Component for App {
                 true
             }
             AppMsg::GoToEditorPage => {
+                self.page = PageType::Editor;
+                true
+            }
+            AppMsg::StartPreviewer => {
+                // start preview server
                 spawn_local(async {
                     async fn start_preview_server() -> FFIResult<()> {
+                        if let Some(started) = ffi::is_preview_server_up().await?.as_bool() {
+                            if started {
+                                return Ok(())
+                            }
+                        }
                         let sourcedir = ffi::open().await?
                             .as_string()
                             .ok_or(JsValue::from_str("failed to get source dir"))?;
@@ -122,13 +137,23 @@ impl Component for App {
                     }
                     if let Err(e) = start_preview_server().await {
                         log::error!("failed to start preview server: {:?}", e);
-                        return;
                     }
-                    log::info!("server is started");
                 });
-                // TODO(2022-04-10): toggle to preview page only when live server is up
-                self.page = PageType::Editor;
-                true
+
+                // check if preview server is up, if the server is up, then we update the page
+                let link = ctx.link().clone();
+                spawn_local(async move {
+                    loop {
+                        if let Ok(resp) = http::Request::get("http://127.0.0.1:8088").send().await {
+                            if resp.status() == 200 {
+                                link.send_message(AppMsg::GoToEditorPage);
+                            }
+                            break;
+                        }
+                        timers::future::sleep(Duration::from_secs(1)).await;
+                    }
+                });
+                false
             }
         }
     }
@@ -161,7 +186,7 @@ impl Component for App {
                                     { "Advanced" }
                                 </a>
                                 <div class="navbar-dropdown">
-                                    <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::GoToEditorPage) }>
+                                    <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::StartPreviewer ) }>
                                         { "Editor Preview" }
                                     </a>
                                     <a class="navbar-item is-hidden-mobile">
@@ -222,7 +247,7 @@ impl Component for App {
                                 </div>
                             }
                             if self.page == PageType::Editor {
-                                <div class="navbar-item">
+                                <div class="navbar-item is-hidden-mobile">
                                     <div class="buttons">
                                         <a class="button is-primary is-small">
                                             <strong>{ "Start" }</strong>
