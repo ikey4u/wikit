@@ -12,7 +12,7 @@ So what are planned to be included? The goals of this project are to make
 
 - **Desktop application for Windows, Linux and MacOS**
 
-    The desktop client is developed using [tauri](https://tauri.studio/en/) and [svelte](https://svelte.dev/):
+    The desktop client is developed using [tauri](https://tauri.studio/en/) and [react](https://reactjs.org/).
 
     ![lookup ui](./docs/imgs/lookup.jpg "lookup ui")
 
@@ -217,24 +217,20 @@ If you add, delete or change the wikit dictionary, remember to restart `Wikit De
 
 # Developement
 
-Install yew related tools
+Install dependencies following the [tauri guide](https://tauri.app/v1/guides/getting-started/prerequisites/), then install tauri-cli
 
-    rustup target add wasm32-unknown-unknown
-    cargo install trunk wasm-bindgen-cli
-
-Install tauri-cli
-
-    cargo install --git https://github.com/tauri-apps/tauri --tag cli.rs-v1.0.0-rc.6 tauri-cli 
+    cargo install --version 1.1.1 tauri-cli
 
 and check the version
 
     cargo tauri --version
 
-Start web server using
+Create a file named `.env` under directory `desktop/ui` with content
 
-    npm run dev
+    BROWSER=none
+    PORT=8080
 
-In a new terminal, build the app
+Start developent using the following command in `desktop/tauri` directory 
 
     cargo tauri dev
 
@@ -248,9 +244,6 @@ To build wikit command line
 To build wikit desktop
 
     cd desktop
-    npm i
-    npm run build
-    # refer Developement section to see the installation of cargo-tauri
     cargo tauri build
 
 You can find the generated files in `target/release`.

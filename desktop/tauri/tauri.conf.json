@@ -6,8 +6,8 @@
   "build": {
     "distDir": "../ui/dist",
     "devPath": "http://localhost:8080",
-    "beforeDevCommand": "cd ui && trunk serve",
-    "beforeBuildCommand": "cd ui && trunk build",
+    "beforeDevCommand": "cd ui && npm start",
+    "beforeBuildCommand": "cd ui && npm run build",
     "withGlobalTauri": true
   },
   "tauri": {
@@ -29,13 +29,11 @@
       "shortDescription": "",
       "longDescription": "",
       "deb": {
-        "depends": [],
-        "useBootstrapper": false
+        "depends": []
       },
       "macOS": {
         "frameworks": [],
         "minimumSystemVersion": "",
-        "useBootstrapper": false,
         "exceptionDomain": "",
         "signingIdentity": null,
         "entitlements": null
@@ -57,7 +55,7 @@
         "title": "Wikit Desktop",
         "width": 768,
         "height": 555,
-        "resizable": false,
+        "resizable": true,
         "fullscreen": false
       }
     ],

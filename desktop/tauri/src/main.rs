@@ -18,7 +18,7 @@ use wikit_core::wikit;
 use wikit_core::util;
 use wikit_core::preview;
 use wikit_core::wikit::WikitDictionary;
-use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, Manager};
+use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, WindowEvent, Manager};
 use tauri::api::dialog;
 use once_cell::sync::Lazy;
 
@@ -329,24 +329,30 @@ fn main() -> Result<()> {
         // Application is ready (triggered only once)
         RunEvent::Ready => {
         },
-        RunEvent::CloseRequested { label, api, .. } => {
-            let app_handle = app_handle.clone();
-            let window = app_handle.get_window(&label).unwrap();
-            // prevent the event loop to close
-            api.prevent_close();
-            dialog::ask(
-                Some(&window),
-                "Wikit Desktop",
-                "Are you sure that you want to exit wikit desktop?",
-                move |answer| {
-                    if answer {
-                        // .close() cannot be called on the main thread
-                        std::thread::spawn(move || {
-                            std::process::exit(0);
-                        });
-                    }
-                },
-            );
+        RunEvent::WindowEvent {
+            label,
+            event: WindowEvent::CloseRequested { api, .. },
+            ..
+        } => {
+            if label == "main" {
+                let app_handle = app_handle.clone();
+                let window = app_handle.get_window("main").unwrap();
+                // prevent the event loop to close
+                api.prevent_close();
+                dialog::ask(
+                    Some(&window),
+                    "Wikit Desktop",
+                    "Are you sure that you want to exit wikit desktop?",
+                    move |answer| {
+                        if answer {
+                            // .close() cannot be called on the main thread
+                            std::thread::spawn(move || {
+                                std::process::exit(0);
+                            });
+                        }
+                    },
+                );
+            }
         },
         RunEvent::ExitRequested { api, .. } => {
             // Keep the event loop running even if all windows are closed
