@@ -6,8 +6,6 @@
 use std::{sync::Mutex, collections::HashMap};
 use std::path::Path;
 use std::sync::Arc;
-use anyhow::{Context, Result};
-use tokio::sync::broadcast::{self, Sender, Receiver};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::atomic::{AtomicU16, Ordering};
@@ -18,9 +16,12 @@ use wikit_core::wikit;
 use wikit_core::util;
 use wikit_core::preview;
 use wikit_core::wikit::WikitDictionary;
+use wikit_proto::DictMeta;
 use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, WindowEvent, Manager};
 use tauri::api::dialog;
 use once_cell::sync::Lazy;
+use anyhow::{Context, Result};
+use tokio::sync::broadcast::{self, Sender, Receiver};
 
 static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(|| {
     Arc::new(Mutex::new(HashMap::new()))
@@ -187,7 +188,7 @@ fn lookup(dictid: String, word: String) -> LookupResponse {
 }
 
 #[tauri::command]
-fn get_dict_list() -> Vec<wikit::DictList> {
+fn get_dict_list() -> Vec<DictMeta> {
     let mut dictlist = vec![];
     let mut dictdb = DICTDB.lock().unwrap();
     if let Ok(dicts) = wikit::load_client_dictionary() {
@@ -195,7 +196,7 @@ fn get_dict_list() -> Vec<wikit::DictList> {
             match dict {
                 wikit::WikitDictionary::Local(ref ld) => {
                     let id = format!("{}", ld.path.display());
-                    dictlist.push(wikit::DictList{ name: ld.head.name.clone(), id: id.clone() });
+                    dictlist.push(DictMeta { name: ld.head.name.clone(), id: id.clone() });
                     dictdb.insert(id.clone(), dict);
                 },
                 wikit::WikitDictionary::Remote(ref rd) => {
@@ -293,6 +294,9 @@ fn main() -> Result<()> {
                         &format!("A universal dictionary\nv{}\nhttps://github.com/ikey4u/wikit", VERSION),
                     );
                 },
+                "homepage" => {
+                    let _ = opener::open("https://github.com/ikey4u/wikit");
+                },
                 "feedback" => {
                     let _ = opener::open("https://github.com/ikey4u/wikit/issues/new");
                 },
@@ -368,7 +372,6 @@ fn main() -> Result<()> {
 fn get_menu() -> Menu {
     let filemenu = Submenu::new("File",
         Menu::new()
-            .add_item(CustomMenuItem::new("about".to_string(), "About Wikit Desktop"))
             .add_item(CustomMenuItem::new("open_config_dir".to_string(), "Open Configuration Directory"))
             .add_item(CustomMenuItem::new("close".to_string(), "Close and Exit"))
     );
@@ -383,12 +386,17 @@ fn get_menu() -> Menu {
     );
     let about_menu = Submenu::new("Help",
         Menu::new()
-            .add_item(CustomMenuItem::new("feedback".to_string(), "Feedback"))
+            .add_item(CustomMenuItem::new("homepage".to_string(), "Home Page"))
+            .add_item(CustomMenuItem::new("feedback".to_string(), "Report Bug"))
             .add_item(CustomMenuItem::new("manual".to_string(), "Manual"))
+            .add_item(CustomMenuItem::new("about".to_string(), "About"))
     );
 
-    Menu::new()
-        .add_submenu(filemenu)
-        .add_submenu(editmenu)
-        .add_submenu(about_menu)
+    let menu = Menu::new();
+    let menu = menu.add_submenu(filemenu).add_submenu(about_menu);
+    // edit menu is not supported on linux
+    #[cfg(not(target_os = "linux"))] {
+        menu.add_submenu(editmenu);
+    }
+    menu
 }

@@ -6,15 +6,15 @@
   "build": {
     "distDir": "../ui/dist",
     "devPath": "http://localhost:8080",
-    "beforeDevCommand": "cd ui && npm start",
-    "beforeBuildCommand": "cd ui && npm run build",
+    "beforeDevCommand": "cd ui && trunk serve",
+    "beforeBuildCommand": "cd ui && trunk build",
     "withGlobalTauri": true
   },
   "tauri": {
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.tauri.dev",
+      "identifier": "com.zhqli.wikit",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -53,9 +53,9 @@
     "windows": [
       {
         "title": "Wikit Desktop",
-        "width": 768,
-        "height": 555,
-        "resizable": true,
+        "width": 1024,
+        "height": 740,
+        "resizable": false,
         "fullscreen": false
       }
     ],

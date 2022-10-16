@@ -69,7 +69,7 @@ You can download them from [Release](https://github.com/ikey4u/wikit/releases) p
 
     If you have experiences with mainstream programming language such as C/C++, Python,
     JavaScript, you may feel familiar with the format. It likes a function definition but without
-    function name. wikit has extended the style, the `<PARAMS>` is a `json5` body with 
+    function name. wikit has extended the style, the `<PARAMS>` is a `json5` body with
     following keys required:
 
     - `name`: This entry name
@@ -187,15 +187,15 @@ windows: C:\Users\YOUNAME\AppData\Roaming\wikit\wikit.toml
 The content of `wikit.toml` looks like
 
 ```
-[cltcfg]                          
-uris = [                          
-    "file:///path/to/dict.wikit", 
-]                                 
-                                  
-[srvcfg]                          
-uris = [                          
-]                                 
-host = "0.0.0.0"                  
+[cltcfg]
+uris = [
+    "file:///path/to/dict.wikit",
+]
+
+[srvcfg]
+uris = [
+]
+host = "0.0.0.0"
 port = 8888
 ```
 
@@ -230,7 +230,7 @@ Create a file named `.env` under directory `desktop/ui` with content
     BROWSER=none
     PORT=8080
 
-Start developent using the following command in `desktop/tauri` directory 
+Start developent using the following command in `desktop/tauri` directory
 
     cargo tauri dev
 

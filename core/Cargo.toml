@@ -46,6 +46,7 @@ rusqlite = { version = "0.27.0", features = ["bundled"] }
 notify = "4.0"
 http = "0.2"
 headers = "0.3"
+wikit-proto = { path = "../proto" }
 
 [dependencies.nom]
 version = "6"

@@ -15,18 +15,12 @@ use std::io::{BufWriter, Write, Seek, SeekFrom, Read};
 use serde::{Deserialize, Serialize};
 use nom::{do_parse, map_res, take};
 use nom::number::streaming::{be_u16, be_u32, be_u64};
+use wikit_proto::DictMeta;
 
 // `516` is the birthday of wikit project (the first commit date 2021-05-16)
 const WIKIT_MAGIC: &'static str = "WIKIT516";
 // the latest wikit dictionary format version
 const LATEST_WIKIT_FMT_VERSION: u32 = 0x00_00_00_01;
-
-// TODO(2022-02-19): select a better type name
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DictList {
-    pub name: String,
-    pub id: String,
-}
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
@@ -200,9 +194,9 @@ impl RemoteDictionary {
         RemoteDictionary { url, user, token }
     }
 
-    pub fn get_dict_list(&self) -> WikitResult<Vec<DictList>> {
+    pub fn get_dict_list(&self) -> WikitResult<Vec<DictMeta>> {
         let url = format!("{}/wikit/list", self.url);
-        let r = reqwest::blocking::get(url)?.json::<Vec<DictList>>()?;
+        let r = reqwest::blocking::get(url)?.json::<Vec<DictMeta>>()?;
         Ok(r)
     }
 

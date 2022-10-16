@@ -265,7 +265,7 @@ async fn main() -> AnyResult<()> {
 
     if let Some(server) = matches.subcommand_matches("server") {
         if server.is_present("start") {
-            // The database config is read from $HOME/.config/wikit/wikit.ron
+            // The database config is read from $HOME/.config/wikit/wikit.toml
             router::rocket().launch().await?;
         }
     }

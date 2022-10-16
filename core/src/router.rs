@@ -9,6 +9,7 @@ use std::sync::Arc;
 use rocket::{Build, Request, catch, get, catchers, routes};
 use rocket::serde::json::Json;
 use once_cell::sync::Lazy;
+use wikit_proto::DictMeta;
 
 pub static DICTMP: Lazy<Arc<Mutex<HashMap<String, String>>>> = Lazy::new(|| {
     Arc::new(Mutex::new(HashMap::new()))
@@ -26,7 +27,7 @@ fn not_found(req: &Request) -> String {
 }
 
 #[get("/list")]
-async fn list() -> Json<Vec<wikit::DictList>> {
+async fn list() -> Json<Vec<DictMeta>> {
     let mut dictlist = vec![];
     if let Ok(config) = config::load_config() {
         for uri in config.srvcfg.uris.iter() {
@@ -47,7 +48,7 @@ async fn list() -> Json<Vec<wikit::DictList>> {
                         dictmp.insert(dictid.clone(), uri.to_string());
                     }
 
-                    dictlist.push(wikit::DictList {
+                    dictlist.push(DictMeta {
                         name: d.head.name,
                         id: dictid.clone(),
                     });
