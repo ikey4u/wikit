@@ -28,7 +28,26 @@ latter is used as a dictionary client which you can lookup words from.
 
 You can download them from [Release](https://github.com/ikey4u/wikit/releases) page.
 
-**To use Wikit Desktop on Windows, you must additionally install [webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section) and [vc_redist.x86](https://aka.ms/vs/17/release/vc_redist.x86.exe) or [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe).**
+For Linux user, you can create a file in path `~/.local/share/applications/com.zhqli.wikit.desktop`
+(if the path does not exist, create it) with the following content (you must change `Path` and  `Exec` to your own):
+
+    #!/usr/bin/env xdg-open
+
+    [Desktop Entry]
+    Name=Wikit Desktop
+    Comment=A universal dictionary
+    Path=/path/to/wikit
+    Exec=/path/to/wikit/wikit-desktop.AppImage 
+    Terminal=false
+    Type=Application
+    Categories=Utility;
+    Keywords=dictionary;dict;
+
+And run `update-desktop-database`, after that you can open wikit desktop from your dash.
+
+    update-desktop-database ~/.local/share/applications
+
+**For Windows user, you must additionally install [webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section) and [vc_redist.x86](https://aka.ms/vs/17/release/vc_redist.x86.exe) or [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe).**
 
 ## Creating dictionary
 
