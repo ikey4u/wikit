@@ -36,3 +36,4 @@ release
 # Added by cargo
 
 /target
+.idea
