@@ -215,5 +215,5 @@ impl Component for App {
 fn main() {
     wasm_logger::init(wasm_logger::Config::default());
     let yewapp = document().get_element_by_id("yewapp").expect("failed to get yewapp element");
-    yew::start_app_in_element::<App>(yewapp);
+    yew::Renderer::<App>::with_root(yewapp).render();
 }

@@ -238,7 +238,7 @@ If you add, delete or change the wikit dictionary, remember to restart `Wikit De
 
 Install dependencies following the [tauri guide](https://tauri.app/v1/guides/getting-started/prerequisites/), then install tauri-cli
 
-    cargo install --version 1.1.1 tauri-cli
+    cargo install --version 1.2.2 tauri-cli
 
 and check the version
 
