@@ -93,7 +93,15 @@ impl Component for Word {
                 }
             }
             WordMsg::OnLookupResult(r) => {
-                self.fuzzy_list = r.words.keys().map(|v| v.clone()).collect();
+                let fuzzy_list = r.words.keys().map(|v| v.clone()).collect::<Vec<String>>();
+                if fuzzy_list.contains(&self.input) {
+                    if let Some(meaning) = r.words.get(&self.input) {
+                        self.word_meaning = meaning.to_owned();
+                        self.show_meaning = true;
+                    }
+                } else {
+                    self.fuzzy_list = fuzzy_list;
+                }
                 self.cache = Some(r);
             }
             WordMsg::OnDictMetaList(metas) => {
