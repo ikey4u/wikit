@@ -1,13 +1,14 @@
 {
   "package": {
     "productName": "Wikit Desktop",
-    "version": "0.1.0"
+    "version": "0.5.0"
   },
   "build": {
     "distDir": "../ui/dist",
     "devPath": "http://localhost:8080",
     "beforeDevCommand": "cd ui && trunk serve",
     "beforeBuildCommand": "cd ui && trunk build",
+    "beforeBundleCommand": "cd ui && trunk build --release",
     "withGlobalTauri": true
   },
   "tauri": {
@@ -60,14 +61,8 @@
       }
     ],
     "security": {
-      "csp": {
-        "default-src": "'self' customprotocol: asset: ws://localhost",
-        "font-src": ["https://fonts.gstatic.com"],
-        "img-src": "'self' asset: https://asset.localhost blob: data:",
-        "style-src": "'unsafe-inline' 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net http: https: http://127.0.0.1",
-        "script-src": "'unsafe-inline' 'unsafe-eval' 'self' http: https: http://127.0.0.1 tauri: tarui://localhost"
-      },
-      "freezePrototype": true
+      "freezePrototype": true,
+      "dangerousDisableAssetCspModification": true
     }
   }
 }
