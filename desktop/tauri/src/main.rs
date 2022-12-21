@@ -21,7 +21,7 @@ use tauri::{CustomMenuItem, Menu, MenuItem, Submenu, RunEvent, WindowEvent, Mana
 use tauri::api::dialog;
 use once_cell::sync::Lazy;
 use anyhow::{Context, Result};
-use tokio::sync::broadcast::{self, Sender, Receiver};
+use tokio::sync::broadcast::{self, Sender};
 
 static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(|| {
     Arc::new(Mutex::new(HashMap::new()))
@@ -395,8 +395,10 @@ fn get_menu() -> Menu {
     let menu = Menu::new();
     let menu = menu.add_submenu(filemenu).add_submenu(about_menu);
     // edit menu is not supported on linux
-    #[cfg(not(target_os = "linux"))] {
-        menu.add_submenu(editmenu);
-    }
+    let menu = if cfg!(not(target_os = "linux")) {
+        menu.add_submenu(editmenu)
+    } else {
+        menu
+    };
     menu
 }
