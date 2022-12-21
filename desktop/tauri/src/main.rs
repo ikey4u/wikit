@@ -373,8 +373,10 @@ fn get_menu() -> Menu {
     let filemenu = Submenu::new("File",
         Menu::new()
             .add_item(CustomMenuItem::new("open_config_dir".to_string(), "Open Configuration Directory"))
-            .add_item(CustomMenuItem::new("close".to_string(), "Close and Exit"))
+            .add_item(CustomMenuItem::new("close".to_string(), "Quit"))
     );
+    let menu = Menu::new().add_submenu(filemenu);
+
     let editmenu = Submenu::new("Edit",
         Menu::new()
             .add_native_item(MenuItem::Copy)
@@ -384,6 +386,13 @@ fn get_menu() -> Menu {
             .add_native_item(MenuItem::Redo)
             .add_native_item(MenuItem::SelectAll)
     );
+    // edit menu is not supported on linux
+    let menu = if cfg!(not(target_os = "linux")) {
+        menu.add_submenu(editmenu)
+    } else {
+        menu
+    };
+
     let about_menu = Submenu::new("Help",
         Menu::new()
             .add_item(CustomMenuItem::new("homepage".to_string(), "Home Page"))
@@ -391,14 +400,7 @@ fn get_menu() -> Menu {
             .add_item(CustomMenuItem::new("manual".to_string(), "Manual"))
             .add_item(CustomMenuItem::new("about".to_string(), "About"))
     );
+    let menu = menu.add_submenu(about_menu);
 
-    let menu = Menu::new();
-    let menu = menu.add_submenu(filemenu).add_submenu(about_menu);
-    // edit menu is not supported on linux
-    let menu = if cfg!(not(target_os = "linux")) {
-        menu.add_submenu(editmenu)
-    } else {
-        menu
-    };
     menu
 }
