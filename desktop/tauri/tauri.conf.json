@@ -6,9 +6,9 @@
   "build": {
     "distDir": "../ui/dist",
     "devPath": "http://localhost:8080",
-    "beforeDevCommand": "cd ui && trunk serve",
-    "beforeBuildCommand": "cd ui && trunk build",
-    "beforeBundleCommand": "cd ui && trunk build --release",
+    "beforeDevCommand": "cd ui && rm -rf dist && trunk serve",
+    "beforeBuildCommand": "cd ui && rm -rf dist && trunk build",
+    "beforeBundleCommand": "cd ui && rm -rf dist && trunk build --release",
     "withGlobalTauri": true
   },
   "tauri": {

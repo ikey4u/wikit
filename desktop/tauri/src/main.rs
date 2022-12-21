@@ -231,8 +231,15 @@ async fn http_file_server() -> Result<()> {
         }),
     );
 
-    let port = util::get_free_tcp_port(Some(INTERNAL_FS_PORT.load(Ordering::SeqCst)))
-        .context("failed to get static file sever port")?;
+    // Restricted ports are not allowed in webkit, see https://chromium.googlesource.com/chromium/src.git/+/refs/heads/master/net/base/port_util.cc#27
+    let restricted_ports = [6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697u16];
+    let port = loop {
+        let port = util::get_free_tcp_port(Some(INTERNAL_FS_PORT.load(Ordering::SeqCst)))
+            .context("failed to get static file sever port")?;
+        if !restricted_ports.contains(&port) {
+            break port;
+        }
+    };
     println!("[+] Internal file server listens at 127.0.0.1:{port}");
     INTERNAL_FS_PORT.store(port, Ordering::SeqCst);
 
@@ -372,7 +379,7 @@ fn main() -> Result<()> {
 fn get_menu() -> Menu {
     let filemenu = Submenu::new("File",
         Menu::new()
-            .add_item(CustomMenuItem::new("open_config_dir".to_string(), "Open Configuration Directory"))
+            .add_item(CustomMenuItem::new("open_config_dir".to_string(), "Configuration"))
             .add_item(CustomMenuItem::new("close".to_string(), "Quit"))
     );
     let menu = Menu::new().add_submenu(filemenu);
