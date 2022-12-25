@@ -74,6 +74,14 @@ pub struct ClientConfig {
     pub uris: Vec<String>,
 }
 
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            uris: vec![],
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ServerConfig {
     pub uris: Vec<String>,
@@ -81,17 +89,29 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            uris: vec![],
+            host: "0.0.0.0".to_string(),
+            port: 8888u16,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WikitConfig {
+    #[serde(default)]
     pub cltcfg: ClientConfig,
+    #[serde(default)]
     pub srvcfg: ServerConfig,
 }
 
 impl Default for WikitConfig {
     fn default() -> Self {
         WikitConfig {
-            cltcfg: ClientConfig { uris: vec![] },
-            srvcfg: ServerConfig { uris: vec![], host: "0.0.0.0".to_string(), port: 8888u16 },
+            cltcfg: ClientConfig::default(),
+            srvcfg: ServerConfig::default(),
         }
     }
 }
