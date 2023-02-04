@@ -47,6 +47,7 @@ notify = "4.0"
 http = "0.2"
 headers = "0.3"
 wikit-proto = { path = "../proto" }
+log = "0.4"
 
 [dependencies.nom]
 version = "6"

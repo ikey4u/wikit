@@ -25,11 +25,18 @@ pub enum ParseOption {
     OnlyHeader,
 }
 
+#[derive(Debug)]
 struct MDXInfo {
     version: u32,
     encoding: String,
     integersz: u32,
     encid: u32,
+}
+
+#[derive(Debug, Default)]
+pub struct MDXDict {
+    pub header: HashMap<String, String>,
+    pub entries: Vec<(String, String)>,
 }
 
 fn bytes_to_u64(buf: &[u8], be: bool) -> u64 {
@@ -75,7 +82,7 @@ fn mdx_decode(mdxinfo: &MDXInfo, buffer: &[u8]) -> AnyResult<String> {
 }
 
 impl MDXInfo {
-    fn new(meta: HashMap<String, String>) -> AnyResult<Self> {
+    fn new(meta: &HashMap<String, String>) -> AnyResult<Self> {
         let version: f64 = if let Some(version) = meta.get("GeneratedByEngineVersion") {
             version.parse().context(elog!("Cannot parse version: {}", version))?
         } else {
@@ -149,13 +156,15 @@ impl<'a> MdxPacket<'a> {
 
 // parse_mdx will parse mdx file into list of (word, meaning) pair, all words are space trimed and
 // converted into lowercase.
-pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(String, String)>> {
+pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<MDXDict> {
+    let mut mdict = MDXDict::default();
+
     let mut buf = Vec::new();
     File::open(mdxpath).context(elog!("failed to open {}", mdxpath))?
         .read_to_end(&mut buf)
         .context(elog!("cannot read mdx file {}", mdxpath))?;
 
-    println!("[+] Parse header ...");
+    log::info!("[+] Parse header ...");
     let mdict_header: NomResult<_> = do_parse!(&buf[..],
         size: be_u32 >>
         meta: map_res!(take!(size + 4),
@@ -187,16 +196,17 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
         ) >> ( meta )
     );
     let (buf, meta) = mdict_header?;
-    println!("[+] Got header\n{:#x?}", meta);
+    mdict.header = meta;
+    log::info!("[+] Got header\n{:#x?}", mdict.header);
     if let Some(option) = option {
         if option == ParseOption::OnlyHeader {
-            return Ok(vec![]);
+            return Ok(mdict);
         }
     }
 
-    let mdxinfo = &MDXInfo::new(meta)?;
+    let mdxinfo = &MDXInfo::new(&mdict.header)?;
 
-    println!("[+] Parse words ...");
+    log::info!("[+] Parse words ...");
     // words: Vec<(word_text: String, meaning_offset: u64)>
     let words: NomResult<Vec<(String, u64)>> = do_parse!(buf,
         // layout: tuple(
@@ -319,7 +329,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                         )
                     );
                     let (remain, info) = info.context(elog!("failed to parse mdx words info"))?;
-                    println!("[+] block_word_count[{}] contians {} words", i, info.0);
+                    log::trace!("[+] block_word_count[{}] contians {} words", i, info.0);
                     infos.push(info);
                     infosbuf = remain.to_vec();
                 }
@@ -389,7 +399,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
                         subwords.push((word_text, meaning_offset));
                         data = remain;
                     }
-                    println!("[+] word_list[{}] contains {} words", i, subwords.len());
+                    log::trace!("[+] word_list[{}] contains {} words", i, subwords.len());
                     words.append(&mut subwords);
 
                     x = packet.remain;
@@ -402,9 +412,10 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
         )
     ); // words parsing
     let (buf, words) = words.context(elog!("word parsing failed"))?;
-    println!("[+] Got {} words", words.len());
+    mdict.header.insert("WordCount".to_owned(), words.len().to_string());
+    log::info!("[+] Got {} words", words.len());
 
-    println!("[+] Parse meanings ...");
+    log::info!("[+] Parse meanings ...");
     let meanings: NomResult<Vec<u8>> = do_parse!(buf,
         meaning_block_count: take!(mdxinfo.integersz) >>
         _word_count: take!(mdxinfo.integersz)  >>
@@ -469,7 +480,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
     let (_, meanings) = meanings.context(elog!("failed to parse meaning "))?;
 
     let mut word_meaning_list: Vec<(String, String)> = vec![];
-    println!("[+] Combine words and meanings ...");
+    log::info!("[+] Combine words and meanings ...");
     let wordcnt = words.len();
     let bar = ProgressBar::new(wordcnt as u64);
     for i in 0..wordcnt {
@@ -498,8 +509,9 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<Vec<(S
         word_meaning_list.push((util::normalize_word(word), meaning));
     }
     bar.finish_with_message("Parsing MDX is done!");
+    mdict.entries = word_meaning_list;
 
-    Ok(word_meaning_list)
+    Ok(mdict)
 }
 
 pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, srcpath: P, dstpath: P) -> AnyResult<()> {
@@ -512,7 +524,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
         .open(dstpath)
         .context(elog!("Cannot open {:?}", dstpath.display()))?;
 
-    println!("[+] Write mdx header ...");
+    log::info!("[+] Write mdx header ...");
     let mut meta = HashMap::new();
     meta.insert("GeneratedByEngineVersion", "2.0");
     meta.insert("RequiredEngineVersion", "2.0");
@@ -757,7 +769,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
         Ok((block_count, written_size))
     };
 
-    println!("[+] Write word infos and values...");
+    log::info!("[+] Write word infos and values...");
     let word_layout_offset = dstmdx.seek(SeekFrom::Current(0))?;
     // layout + adler32 + packtype + adler32
     let hole: Vec<u8> = vec![0; 40 + 4 + 4 + 4];
@@ -770,7 +782,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
     let word_info_size = 4 + 4 + word_info_size;
     let word_info_unpack_size = word_info_size - 8;
 
-    println!("[+] Write layout for words...");
+    log::info!("[+] Write layout for words...");
     // calculate adler32 of infos and infos layout
     dstmdx.seek(SeekFrom::Start(word_layout_offset + 40 + 4 + 4 + 4))?;
     let mut reader = BufReader::new(&dstmdx);
@@ -796,7 +808,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
     dstmdx.write(&packtype.to_be_bytes()[..])?;
     dstmdx.write(&infosbuf_adler32.to_be_bytes()[..])?;
 
-    println!("[+] Write meaning info and values...");
+    log::info!("[+] Write meaning info and values...");
     let meaning_layout_offset = word_layout_offset + 40 + 4 + word_info_size + word_block_size;
     dstmdx.seek(SeekFrom::Start(meaning_layout_offset))?;
     let hole: Vec<u8> = vec![0; 32];
@@ -806,7 +818,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
     let ret = write_mdx_layer(&mut dstmdx, &mut offtbls, MDXLayer::MeaningsValue)?;
     let (meaning_block_count, meaning_block_size) = ret;
 
-    println!("[+] Write layout for meanings ...");
+    log::info!("[+] Write layout for meanings ...");
     dstmdx.seek(SeekFrom::Start(meaning_layout_offset))?;
     dstmdx.write(&meaning_block_count.to_be_bytes()[..])?;
     dstmdx.write(&word_count.to_be_bytes()[..])?;
@@ -830,24 +842,42 @@ pub async fn save_into_db(dict: Vec<(String, String)>, dburl: &str, table: &str)
     let rows: (i64, ) = sqlx::query_as(format!("SELECT COUNT(*) from {}", table).as_str())
         .fetch_one(&pool)
         .await?;
-    println!("[+] The number of record in table {} is: {:?}", table, rows.0);
+    log::info!("[+] The number of record in table {} is: {:?}", table, rows.0);
     Ok(())
 }
 
-pub fn write_into_text<P>(dict: Vec<(String, String)>, output: P) -> AnyResult<()>
+pub fn write_into_text<P>(dict: &MDXDict, output: P) -> AnyResult<()>
     where P: AsRef<Path>
 {
+    let output = output.as_ref();
     let mut text = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(output.as_ref())
-        .context(elog!("Cannot open {:?}", output.as_ref().display()))?;
-    for (word, meaning) in dict {
-        let item = format!("{}\n{}\n</>\n", word, meaning);
+        .open(output)
+        .context(elog!("Cannot open {:?}", output.display()))?;
+    for (word, meaning) in dict.entries.iter() {
+        let word = word.trim();
+        // we do not need the messy `^M` character
+        let meaning = meaning.replace("\r\n", "\n");
+        let item = format!("{}\n{}\n</>\n\n", word, meaning.trim());
         text.write(item.as_bytes())?;
     }
 
+    if let Ok((pdir, stem, _)) = util::parse_path(output) {
+        let metafile = pdir.join(stem + ".toml");
+        let mut metafile = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(metafile.as_path())
+            .context(elog!("Cannot open {:?}", metafile.as_path().display()))?;
+        let mut kv = dict.header.iter().collect::<Vec<(&String, &String)>>();
+        kv.sort_by(|a, b| a.0.cmp(b.0));
+        for (k, v) in kv {
+            metafile.write(format!("# {}: {}\n", k, v).as_bytes())?;
+        }
+    }
     Ok(())
 }
 

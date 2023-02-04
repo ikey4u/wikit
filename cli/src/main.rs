@@ -73,6 +73,13 @@ impl ResourceFormat {
 
 #[rocket::main]
 async fn main() -> AnyResult<()> {
+    tracing_subscriber::fmt()
+        .event_format(
+            tracing_subscriber::fmt::format()
+                .with_file(true)
+                .with_line_number(true)
+        ).init();
+
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::ColoredHelp)
@@ -177,7 +184,7 @@ async fn main() -> AnyResult<()> {
                     },
                     (ResourceFormat::MDX, ResourceFormat::TEXT) => {
                         let dict = mdict::parse_mdx(input.as_str(), None)?;
-                        mdict::write_into_text(dict, &output)?;
+                        mdict::write_into_text(&dict, &output)?;
                     },
                     (ResourceFormat::TEXT, ResourceFormat::MACDICT) => {
                         let file = File::open(&input).context(elog!("Cannot open {:?}", &input))?;
@@ -189,7 +196,7 @@ async fn main() -> AnyResult<()> {
                         let textpath = pdir.join(stem + "_wikit.txt");
                         if !textpath.exists() {
                             let dict = mdict::parse_mdx(input.as_str(), None)?;
-                            if mdict::write_into_text(dict, textpath.as_path()).is_err() {
+                            if mdict::write_into_text(&dict, textpath.as_path()).is_err() {
                                 std::fs::remove_file(textpath.as_path())
                                     .context(elog!("cannot remove file {}", textpath.display()))?;
                             };
@@ -211,7 +218,7 @@ async fn main() -> AnyResult<()> {
                     (ResourceFormat::MDX, ResourceFormat::POSTGRES) => {
                         let table = dict.value_of("table").expect("Please specify database table name");
                         let pairs = mdict::parse_mdx(input.as_str(), None)?;
-                        mdict::save_into_db(pairs, &output, table).await?;
+                        mdict::save_into_db(pairs.entries, &output, table).await?;
                     }
                     // convert `.wikit.txt` source file into sqlite database
                     (ResourceFormat::TEXT, ResourceFormat::SQLITE) => {

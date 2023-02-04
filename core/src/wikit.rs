@@ -357,7 +357,7 @@ impl LocalDictionary {
         let srcfile_path_str = &format!("{}", srcfile.display());
         let mut word_meaning_list = match suffix.to_lowercase().as_str() {
             "mdx" => {
-                mdict::parse_mdx(srcfile_path_str, None)?
+                mdict::parse_mdx(srcfile_path_str, None)?.entries
             },
             "txt" => {
                 let f = File::open(srcfile_path_str).context(elog!("failed to open {}", srcfile_path_str))?;
