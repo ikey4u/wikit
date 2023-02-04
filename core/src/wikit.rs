@@ -46,24 +46,16 @@ pub enum WikitSourceType {
     Wikit,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WikitDictConf {
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct WikitDictProfile {
     name: String,
-    desc: String,
-    author: String,
-}
-
-impl WikitDictConf {
-    fn new<S>(name: S, desc: S, author: S) -> Self
-    where
-        S: AsRef<str>,
-    {
-        WikitDictConf {
-            name: name.as_ref().to_string(),
-            desc: desc.as_ref().to_string(),
-            author: author.as_ref().to_string(),
-        }
-    }
+    version: String,
+    authors: Vec<String>,
+    distributors: Vec<String>,
+    description: String,
+    homepage: String,
+    css: String,
+    js: String,
 }
 
 #[derive(Debug)]
@@ -268,20 +260,8 @@ impl LocalDictionary {
     /// or `/some/dir/dict.txt`, `outfile` is optional, if it is none, then the output file will be
     /// `/some/dir/dict.wikit`.
     ///
-    /// Moreover, you may want to provide the following files to decorate your dictionary
-    ///
-    ///     - /some/dir/dict.js
-    ///
-    ///         Javascript file for your dictionary
-    ///
-    ///     - /some/dir/dict.css
-    ///
-    ///         CSS file for your dictionary
-    ///
-    ///     - /some/dir/dict.toml
-    ///
-    ///         You can config your dictionary information in this file. See
-    ///         [WikitDictConf] for more details.
+    /// Moreover, you can provide a file named `dict.toml` alonside with your dictionary such as
+    /// `/some/dir/dict.toml` to describe your dictionary, see [WikitDictProfile] for more details.
     pub fn create<P, Q>(srcfile: P, outfile: Option<Q>) -> WikitResult<PathBuf>
     where
         P: AsRef<Path>,
@@ -291,25 +271,34 @@ impl LocalDictionary {
         let (pdir, stem, suffix) = util::parse_path(srcfile)
             .context(elog!("failed to get parent directory of {}", srcfile.display()))?;
 
-        let mut script = String::new();
-        if let Ok(mut f) = File::open(pdir.join(stem.clone() + ".js")) {
-            f.read_to_string(&mut script)?;
-        }
-
-        let mut style = String::new();
-        if let Ok(mut f) = File::open(pdir.join(stem.clone() + ".css")) {
-            f.read_to_string(&mut style)?;
-        }
-
         let mut conf = String::new();
         if let Ok(mut f) = File::open(pdir.join(stem.clone() + ".toml")) {
             f.read_to_string(&mut conf)?;
         };
-        let conf = toml::from_str::<WikitDictConf>(&conf).unwrap_or(WikitDictConf::new(
-            stem.as_str(),
-            "this dictionary has no description",
-            "anonymous"
-        ));
+        let conf = toml::from_str::<WikitDictProfile>(&conf).unwrap_or({
+            let mut def = WikitDictProfile::default();
+            def.name = stem.as_str().to_owned();
+            def.description = "this dictionary has no description".to_owned();
+            def.authors = vec!["anonymous".to_owned()];
+            def
+        });
+
+        let read_include_file = |maybe_path: &str| -> String {
+            let mut content = String::new();
+            if maybe_path.trim().starts_with('@') {
+                // TODO: avoid path traversal?
+                if let Ok(mut f) = File::open(pdir.join(&maybe_path.trim()[1..])) {
+                    _ = f.read_to_string(&mut content);
+                }
+            } else {
+                if maybe_path.trim().len() > 0 {
+                    content = maybe_path.to_owned();
+                }
+            }
+            content
+        };
+        let style = read_include_file(conf.css.trim());
+        let script = read_include_file(conf.js.trim());
 
         let outfile = if let Some(outfile) = outfile {
             let outfile = outfile.as_ref();
@@ -333,9 +322,9 @@ impl LocalDictionary {
         writer.write(&namesz.to_be_bytes()[..])?;
         writer.write(&conf.name.as_bytes()[..])?;
         // descsz and desc
-        let descsz = conf.desc.len() as u16;
+        let descsz = conf.description.len() as u16;
         writer.write(&descsz.to_be_bytes()[..])?;
-        writer.write(&conf.desc.as_bytes()[..])?;
+        writer.write(&conf.description.as_bytes()[..])?;
         // ifmt
         writer.write(&[index::IndexFormat::FST as u8])?;
         // ibase
