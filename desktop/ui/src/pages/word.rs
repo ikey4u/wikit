@@ -1,17 +1,16 @@
 use crate::{dom, ffi::{self, get_dict_list}};
 use crate::util;
 
-use wasm_bindgen::{JsCast, UnwrapThrowExt};
+use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use wikit_proto::{DictMeta, LookupResponse};
-use gloo_utils::format::JsValueSerdeExt;
 
-const DEBOUNCE_DELTA: i64 = 500;
+const DEBOUNCE_DELTA: i64 = 50;
 
 pub enum WordMsg {
     OnSearchTextChange(String),
-    OnLookup(String),
+    OnClickFuzzyItem(String),
     OnLookupResult(LookupResponse),
     OnDictMetaList(Vec<DictMeta>),
 }
@@ -25,17 +24,26 @@ pub struct Word {
     cache: Option<LookupResponse>,
     show_meaning: bool,
     word_meaning: String,
+    style: String,
+    script: String,
 }
 
-enum Fileds {
+enum Field {
     SearchInput,
 }
 
-impl Fileds {
-    pub fn value(&self) -> String {
+impl Field {
+    pub fn get(&self) -> String {
         match self {
-            Fileds::SearchInput => {
+            Field::SearchInput => {
                 dom::get_input_value("search")
+            }
+        }
+    }
+    pub fn set<S: AsRef<str>>(&self, val: S) {
+        match self {
+            Field::SearchInput => {
+                dom::set_input_value("search", val.as_ref());
             }
         }
     }
@@ -52,7 +60,6 @@ impl Component for Word {
                 .into_serde().expect_throw("dictionary list corrupted");
             link.send_message(WordMsg::OnDictMetaList(metas));
         });
-
         Self {
             input: String::new(),
             fuzzy_list: vec![],
@@ -62,6 +69,8 @@ impl Component for Word {
             cache: None::<LookupResponse>,
             show_meaning: false,
             word_meaning: "".to_owned(),
+            style: "".to_owned(),
+            script: "".to_owned(),
         }
     }
 
@@ -69,13 +78,14 @@ impl Component for Word {
         let link = ctx.link().clone();
         match msg {
             WordMsg::OnSearchTextChange(_) => {
-                let input = Fileds::SearchInput.value();
-                if util::get_epoch_millis() - self.previous_change_epoch >= DEBOUNCE_DELTA && input.trim().len() > 0 {
-                    self.input = input.clone();
+                self.input = Field::SearchInput.get().to_lowercase();
+                let epoch = util::get_epoch_millis();
+                if epoch - self.previous_change_epoch >= DEBOUNCE_DELTA && self.input.trim().len() > 0 {
                     self.previous_change_epoch = util::get_epoch_millis();
                     self.show_meaning = false;
                     if let Some(idx) = self.current_dictionary_index {
                         let dictid = self.dict_meta_list[idx].id.clone();
+                        let input = self.input.clone();
                         spawn_local(async move {
                             let cache: LookupResponse = ffi::lookup(dictid, input).await.expect_throw("failed to lookup")
                                 .into_serde().expect_throw("lookup up response corrupted");
@@ -84,20 +94,25 @@ impl Component for Word {
                     }
                 }
             }
-            WordMsg::OnLookup(word) => {
+            WordMsg::OnClickFuzzyItem(word) => {
                 if let Some(r) = self.cache.as_ref() {
                     if let Some(meaning) = r.words.get(word.as_str()) {
+                        // self.input = word.to_lowercase();
+                        Field::SearchInput.set(word);
                         self.word_meaning = meaning.to_owned();
                         self.show_meaning = true;
                     }
                 }
             }
             WordMsg::OnLookupResult(r) => {
-                let fuzzy_list = r.words.keys().map(|v| v.clone()).collect::<Vec<String>>();
+                let mut fuzzy_list = r.words.keys().map(|v| v.clone()).collect::<Vec<String>>();
+                fuzzy_list.sort();
                 if fuzzy_list.contains(&self.input) {
                     if let Some(meaning) = r.words.get(&self.input) {
                         self.word_meaning = meaning.to_owned();
                         self.show_meaning = true;
+                        self.style = r.style.clone();
+                        self.script = r.script.clone();
                     }
                 } else {
                     self.fuzzy_list = fuzzy_list;
@@ -115,36 +130,9 @@ impl Component for Word {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-         let meaning_page = if let Some(r) = self.cache.as_ref() {
-            let page = format!(r#"
-                <!DOCTYPE html>
-                <html>
-                  <head>
-                    <meta charset="UTF-8" />
-                    {script}
-                    {style}
-                  </head>
-                  <body>
-                    {body}
-                  </body>
-                </html>
-            "#,
-                script = r.script,
-                style = r.style,
-                body = self.word_meaning,
-            );
-            html! {
-                <iframe title="dictview" srcdoc={page} style="width: 100%; height: 548px;"></iframe>
-            }
-        } else {
-            html! {
-                <p>{"bug found!panic"}{self.input.clone()}</p>
-            }
-        };
-
-        html! {
-            <div>
-                if self.dict_meta_list.len() > 0 {
+        let search_bar = {
+            if self.dict_meta_list.len() > 0 {
+                html! {
                     <div class="field has-addons">
                         <p class="control">
                           <span class="select is-rounded is-small">
@@ -165,7 +153,7 @@ impl Component for Word {
                                 id="search"
                                 onkeyup={
                                     ctx.link().callback(|_| {
-                                        WordMsg::OnSearchTextChange(Fileds::SearchInput.value())
+                                        WordMsg::OnSearchTextChange(Field::SearchInput.get())
                                     })
                                 }
                             />
@@ -174,33 +162,74 @@ impl Component for Word {
                             </span>
                         </p>
                     </div>
-                } else {
+                }
+            } else {
+                html! {
                     <div>
                         <p>{ "No dictionary is found" }</p>
                     </div>
                 }
+            }
+        };
+        let meaning_panel = {
+            if self.input.trim().len() > 0 {
                 if self.show_meaning {
-                    {meaning_page}
+                    let content = format!(r#"
+                        <!DOCTYPE html>
+                        <html>
+                          <head>
+                            <meta charset="UTF-8" />
+                            {script}
+                            {style}
+                          </head>
+                          <body>
+                            {body}
+                          </body>
+                        </html>
+                    "#,
+                        script = self.script,
+                        style = self.style,
+                        body = self.word_meaning,
+                    );
+                    html! {
+                        <iframe id="scrollbar-arrow" class="fill-xy" style="overflow-x: hidden; overflow-y: auto;" srcdoc={content}></iframe>
+                    }
                 } else {
                     if self.fuzzy_list.len() > 0 {
-                        <div class="column wikit-list"> {
-                            self.fuzzy_list.clone().into_iter().map(|item| {
-                                html!{
-                                    <div>
-                                        <button class="button is-fullwidth" onclick={
-                                            let item = item.clone();
-                                            ctx.link().callback(move |_| {
-                                                WordMsg::OnLookup(item.clone())
-                                            })
-                                        }>
-                                        { item }
-                                        </button>
-                                    </div>
-                                }
-                            }).collect::<Html>()
-                        } </div>
+                        html! {
+                            <div class="column wikit-list"> {
+                                self.fuzzy_list.clone().into_iter().map(|item| {
+                                    html!{
+                                        <div>
+                                            <button class="button is-fullwidth" onclick={
+                                                let item = item.clone();
+                                                ctx.link().callback(move |_| {
+                                                    WordMsg::OnClickFuzzyItem(item.clone())
+                                                })
+                                            }>
+                                            { item }
+                                            </button>
+                                        </div>
+                                    }
+                                }).collect::<Html>()
+                            } </div>
+                        }
+                    } else {
+                        html! {
+                            <div class="fill-xy has-text-centered pt-6">{"Nothing is there ..."}</div>
+                        }
                     }
                 }
+            } else {
+                html! {
+                    <div class="fill-xy has-text-centered pt-6">{"Type a word to look up ..."}</div>
+                }
+            }
+        };
+        html! {
+            <div class="fill-xy">
+                {search_bar}
+                {meaning_panel}
             </div>
         }
     }

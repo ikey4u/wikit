@@ -875,7 +875,7 @@ pub fn write_into_text<P>(dict: &MDXDict, output: P) -> AnyResult<()>
         let mut kv = dict.header.iter().collect::<Vec<(&String, &String)>>();
         kv.sort_by(|a, b| a.0.cmp(b.0));
         for (k, v) in kv {
-            metafile.write(format!("# {}: {}\n", k, v).as_bytes())?;
+            metafile.write(format!("# {}: {}\n", k.trim(), v.trim()).as_bytes())?;
         }
     }
     Ok(())

@@ -20,3 +20,11 @@ pub fn get_input_value(id: &str) -> String {
     }
     "".into()
 }
+
+pub fn set_input_value(id: &str, val: &str) {
+    if let Some(element) = document().get_element_by_id(id) {
+        if let Some(element) = element.dyn_ref::<HtmlInputElement>() {
+            element.set_value(val);
+        }
+    }
+}

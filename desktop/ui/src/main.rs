@@ -127,85 +127,10 @@ impl Component for App {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let fouces_menu_class = |typ: PageType| {
-            if self.page == typ {
-                "navbar-item is-active has-text-centered has-text-link"
-            } else {
-                "navbar-item is-active has-text-centered"
-            }
-        };
         html! {
-            <div>
-                <nav class="navbar is-size-7 wikit-menu">
-                    <div class="navbar-menu">
-                        <div class="navbar-start">
-                            <a class={ fouces_menu_class(PageType::Word) } onclick={ ctx.link().callback(|_| AppMsg::GotoWordPage) }>
-                                <div>
-                                  <p>
-                                    <span class="icon is-small is-centered">
-                                      <i class="bi bi-braces"></i>
-                                    </span>
-                                  </p>
-                                  <p>{ "Word" }</p>
-                                </div>
-                            </a>
-                            <a class="navbar-item has-text-centered is-hidden" onclick={ ctx.link().callback(|_| AppMsg::GotoSentencePage) }>
-                                <div>
-                                  <p>
-                                    <span class="icon is-small is-centered">
-                                      <i class="bi bi-braces-asterisk"></i>
-                                    </span>
-                                  </p>
-                                  <p>{ "Sentence" }</p>
-                                </div>
-                            </a>
-                            <a class="navbar-item has-text-centered is-hidden" onclick={ ctx.link().callback(|_| AppMsg::GotoFavoritePage) }>
-                                <div>
-                                  <p>
-                                    <span class="icon is-small is-centered">
-                                      <i class="bi bi-heart"></i>
-                                    </span>
-                                  </p>
-                                  <p>{ "Favorite" }</p>
-                                </div>
-                            </a>
-                            <div class="navbar-item has-dropdown is-hoverable">
-                                <a class="navbar-link">
-                                    { "Advanced" }
-                                </a>
-                                <div class="navbar-dropdown">
-                                    <a class="navbar-item" onclick={ ctx.link().callback(|_| AppMsg::StartPreviewer ) }>
-                                        { "Live Editor" }
-                                    </a>
-                                    <a class="navbar-item is-hidden">
-                                        { "Converter" }
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="navbar-end is-hidden">
-                            <a class={ fouces_menu_class(PageType::Setting) } onclick={ ctx.link().callback(|_| AppMsg::GotoSettingPage) }>
-                                <div>
-                                  <p>
-                                    <span class="icon is-small is-centered">
-                                      <i class="bi bi-gear"></i>
-                                    </span>
-                                  </p>
-                                  <p>{ "Setting" }</p>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                </nav>
-                <div class="columns mt-4">
-                    <div class="column with-wikit-body-height">
-                        <div class="container">
-                            <div class="notification is-primary is-hidden">
-                                {"notification ..."}
-                            </div>
-                            { self.page.html() }
-                        </div>
-                    </div>
+            <div class="container fill-xy">
+                <div class="section fill-xy">
+                    {self.page.html()}
                 </div>
             </div>
         }
