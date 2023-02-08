@@ -130,106 +130,118 @@ impl Component for Word {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let search_bar = {
-            if self.dict_meta_list.len() > 0 {
-                html! {
-                    <div class="field has-addons">
-                        <p class="control">
-                          <span class="select is-rounded is-small">
-                            <select> {
-                                self.dict_meta_list.iter().map(|meta| {
-                                    html! {
-                                        <option>{ meta.name.clone() }</option>
-                                    }
-                                }).collect::<Html>()
-                            } </select>
-                          </span>
-                        </p>
-                        <p class="control has-icons-left is-expanded">
-                            <input
-                                class="input is-rounded is-small"
-                                autocomplete="none" autocorrect="off" autocapitalize="none"
-                                type="text"
-                                id="search"
-                                onkeyup={
-                                    ctx.link().callback(|_| {
-                                        WordMsg::OnSearchTextChange(Field::SearchInput.get())
-                                    })
+        let ui_search_bar = {
+            html! {
+                <div class="field has-addons">
+                    <p class="control">
+                      <span class="select is-rounded is-small">
+                        <select> {
+                            self.dict_meta_list.iter().enumerate().map(|(i, meta)| {
+                                html! {
+                                    <option value={i.to_string()}>{ meta.name.clone() }</option>
                                 }
-                            />
-                            <span class="icon is-small is-left">
-                                <i class="bi bi-search"></i>
-                            </span>
-                        </p>
-                    </div>
-                }
-            } else {
-                html! {
-                    <div>
-                        <p>{ "No dictionary is found" }</p>
-                    </div>
-                }
+                            }).collect::<Html>()
+                        } </select>
+                      </span>
+                    </p>
+                    <p class="control has-icons-left is-expanded">
+                        <input
+                            class="input is-rounded is-small"
+                            autocomplete="none" autocorrect="off" autocapitalize="none"
+                            type="text"
+                            id="search"
+                            onkeyup={
+                                ctx.link().callback(|_| {
+                                    WordMsg::OnSearchTextChange(Field::SearchInput.get())
+                                })
+                            }
+                        />
+                        <span class="icon is-small is-left">
+                            <i class="bi bi-search"></i>
+                        </span>
+                    </p>
+                </div>
             }
         };
-        let meaning_panel = {
-            if self.input.trim().len() > 0 {
-                if self.show_meaning {
-                    let content = format!(r#"
-                        <!DOCTYPE html>
-                        <html>
-                          <head>
-                            <meta charset="UTF-8" />
-                            {script}
-                            {style}
-                          </head>
-                          <body>
-                            {body}
-                          </body>
-                        </html>
-                    "#,
-                        script = self.script,
-                        style = self.style,
-                        body = self.word_meaning,
-                    );
-                    html! {
-                        <iframe id="scrollbar-arrow" class="fill-xy" style="overflow-x: hidden; overflow-y: auto;" srcdoc={content}></iframe>
-                    }
-                } else {
-                    if self.fuzzy_list.len() > 0 {
-                        html! {
-                            <div class="column wikit-list"> {
-                                self.fuzzy_list.clone().into_iter().map(|item| {
-                                    html!{
-                                        <div>
-                                            <button class="button is-fullwidth" onclick={
-                                                let item = item.clone();
-                                                ctx.link().callback(move |_| {
-                                                    WordMsg::OnClickFuzzyItem(item.clone())
-                                                })
-                                            }>
-                                            { item }
-                                            </button>
-                                        </div>
-                                    }
-                                }).collect::<Html>()
-                            } </div>
+        let ui_no_dictionary_found = {
+            html! {
+                <div>
+                    <p>{ "No dictionary is found" }</p>
+                </div>
+            }
+        };
+        let ui_meaning = {
+            let content = format!(r#"
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <meta charset="UTF-8" />
+                    {script}
+                    {style}
+                  </head>
+                  <body>
+                    {body}
+                  </body>
+                </html>
+            "#,
+                script = self.script,
+                style = self.style,
+                body = self.word_meaning,
+            );
+            html! {
+                <iframe id="scrollbar-arrow" class="fill-xy" style="overflow-x: hidden; overflow-y: auto;" srcdoc={content}></iframe>
+            }
+        };
+        let ui_word_candidates = {
+            html! {
+                <div class="column wikit-list"> {
+                    self.fuzzy_list.clone().into_iter().map(|item| {
+                        html!{
+                            <div>
+                                <button class="button is-fullwidth" onclick={
+                                    let item = item.clone();
+                                    ctx.link().callback(move |_| {
+                                        WordMsg::OnClickFuzzyItem(item.clone())
+                                    })
+                                }>
+                                { item }
+                                </button>
+                            </div>
                         }
-                    } else {
-                        html! {
-                            <div class="fill-xy has-text-centered pt-6">{"Nothing is there ..."}</div>
-                        }
-                    }
-                }
-            } else {
-                html! {
-                    <div class="fill-xy has-text-centered pt-6">{"Type a word to look up ..."}</div>
-                }
+                    }).collect::<Html>()
+                } </div>
+            }
+        };
+        let ui_no_word_candidate = {
+            html! {
+                <div class="fill-xy has-text-centered pt-6">{"Nothing is there ..."}</div>
+            }
+        };
+        let ui_meaning_placeholder = {
+            html! {
+                <div class="fill-xy has-text-centered pt-6">{"Type a word to look up ..."}</div>
             }
         };
         html! {
             <div class="fill-xy">
-                {search_bar}
-                {meaning_panel}
+                if self.dict_meta_list.len() > 0 {
+                    {ui_search_bar}
+                    if self.input.trim().len() > 0 {
+                        if self.show_meaning {
+                            {ui_meaning}
+                        } else {
+                            if self.fuzzy_list.len() > 0 {
+                                {ui_word_candidates}
+                            } else {
+                                {ui_no_word_candidate}
+                            }
+                        }
+                    } else {
+                        {ui_meaning_placeholder}
+                    }
+                } else {
+                    {ui_no_dictionary_found}
+                }
             </div>
         }
     }
