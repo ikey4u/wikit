@@ -179,8 +179,12 @@ impl Component for Word {
         };
         let ui_no_dictionary_found = {
             html! {
-                <div>
-                    <p>{ "No dictionary is found" }</p>
+                <div class="center-xy" style="font-size: 1.5em;">
+                <p>
+                    { "It seems that you do not install any wikit dictionary, see "}
+                    <a href="https://github.com/ikey4u/wikit/wiki/Home" target="_blank">{ "Wikit Introduction" }</a>
+                    { " to learn how to install dictionary." }
+                </p>
                 </div>
             }
         };
