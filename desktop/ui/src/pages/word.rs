@@ -5,14 +5,17 @@ use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 use wikit_proto::{DictMeta, LookupResponse};
+use web_sys::HtmlSelectElement;
 
 const DEBOUNCE_DELTA: i64 = 50;
 
 pub enum WordMsg {
     OnSearchTextChange(String),
     OnClickFuzzyItem(String),
+    StartLookup,
     OnLookupResult(LookupResponse),
     OnDictMetaList(Vec<DictMeta>),
+    OnDictChange(usize),
 }
 
 pub struct Word {
@@ -81,23 +84,25 @@ impl Component for Word {
                 self.input = Field::SearchInput.get().to_lowercase();
                 let epoch = util::get_epoch_millis();
                 if epoch - self.previous_change_epoch >= DEBOUNCE_DELTA && self.input.trim().len() > 0 {
-                    self.previous_change_epoch = util::get_epoch_millis();
-                    self.show_meaning = false;
-                    if let Some(idx) = self.current_dictionary_index {
-                        let dictid = self.dict_meta_list[idx].id.clone();
-                        let input = self.input.clone();
-                        spawn_local(async move {
-                            let cache: LookupResponse = ffi::lookup(dictid, input).await.expect_throw("failed to lookup")
-                                .into_serde().expect_throw("lookup up response corrupted");
-                            link.send_message(WordMsg::OnLookupResult(cache));
-                        });
-                    }
+                    link.send_message(WordMsg::StartLookup);
+                }
+            }
+            WordMsg::StartLookup => {
+                self.previous_change_epoch = util::get_epoch_millis();
+                self.show_meaning = false;
+                if let Some(idx) = self.current_dictionary_index {
+                    let dictid = self.dict_meta_list[idx].id.clone();
+                    let input = self.input.clone();
+                    spawn_local(async move {
+                        let cache: LookupResponse = ffi::lookup(dictid, input).await.expect_throw("failed to lookup")
+                            .into_serde().expect_throw("lookup up response corrupted");
+                        link.send_message(WordMsg::OnLookupResult(cache));
+                    });
                 }
             }
             WordMsg::OnClickFuzzyItem(word) => {
                 if let Some(r) = self.cache.as_ref() {
                     if let Some(meaning) = r.words.get(word.as_str()) {
-                        // self.input = word.to_lowercase();
                         Field::SearchInput.set(word);
                         self.word_meaning = meaning.to_owned();
                         self.show_meaning = true;
@@ -125,17 +130,26 @@ impl Component for Word {
                 }
                 self.dict_meta_list = metas;
             }
+            WordMsg::OnDictChange(dictidx) => {
+                self.current_dictionary_index = Some(dictidx);
+                link.send_message(WordMsg::StartLookup);
+            }
         }
         true
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let link = ctx.link();
+        let on_dictionary_change = link.callback(|e: Event| {
+            let select = e.target_dyn_into::<HtmlSelectElement>().unwrap();
+            WordMsg::OnDictChange(select.value().parse::<usize>().unwrap())
+        });
         let ui_search_bar = {
             html! {
                 <div class="field has-addons">
                     <p class="control">
                       <span class="select is-rounded is-small">
-                        <select> {
+                        <select onchange={on_dictionary_change}> {
                             self.dict_meta_list.iter().enumerate().map(|(i, meta)| {
                                 html! {
                                     <option value={i.to_string()}>{ meta.name.clone() }</option>

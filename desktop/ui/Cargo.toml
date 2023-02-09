@@ -10,7 +10,7 @@ wasm-bindgen-futures = "0.4.29"
 js-sys = "0.3.56"
 log = "0.4.16"
 gloo = { version = "0.7", features = [ "futures" ] }
-web-sys = { version = "0.3.56", features = [ "InputEvent", "HtmlIFrameElement" ] }
+web-sys = { version = "0.3.56", features = [ "InputEvent", "HtmlIFrameElement", "HtmlSelectElement" ] }
 anyhow = { version = "1.0" }
 futures-channel = "0.3"
 futures = "0.3.21"
