@@ -28,7 +28,6 @@ tmp
 __pycache__
 # Ignore user specific files in Xcode Project
 xcuserdata
-Cargo.lock
 private
 release
 
