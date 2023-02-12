@@ -1,6 +1,6 @@
 [package]
 name = "wikit-desktop"
-version = "0.5.0"
+version = "0.6.0"
 description = "Wikit Desktop - A universal dictionary for human"
 authors = ["ikey4u <pwnkeeper@gmail.com>"]
 license = "MIT"
