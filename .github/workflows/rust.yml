@@ -49,7 +49,7 @@ jobs:
       if: startsWith(matrix.os,'ubuntu')
       uses: actions/upload-artifact@v2
       with:
-        name: linux-artifact
+        name: wikit-linux
         path: |
           linux-artifact
 
@@ -63,7 +63,7 @@ jobs:
       if: startsWith(matrix.os, 'macos')
       uses: actions/upload-artifact@v2
       with:
-        name: darwin-artifact
+        name: wikit-darwin
         path: |
           darwin-artifact
 
@@ -77,6 +77,6 @@ jobs:
       if: startsWith(matrix.os, 'windows')
       uses: actions/upload-artifact@v2
       with:
-        name: windows-artifact
+        name: wikit-windows
         path: |
           windows-artifact
