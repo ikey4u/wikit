@@ -9,7 +9,7 @@ languages. It contains the following components
 
     The desktop client is developed using [tauri](https://tauri.studio/en/) and [yew](https://yew.rs/).
 
-    ![wikit main screen](./docs/imgs/wikit-main-screen.png "wikit main screen")
+    ![wikit main screen](./docs/imgs/wikit-main-screen.jpg "wikit main screen")
 
 - Wikit Server: A dictionary server
 
@@ -21,7 +21,7 @@ languages. It contains the following components
 
 # Installation and Usage
 
-You can download Wikit CLI and Wikit Desktop from [Release](https://github.com/ikey4u/wikit/releases) page (to be released soon).
+You can download Wikit CLI and Wikit Desktop from [Release](https://github.com/ikey4u/wikit/releases) page.
 
 To install dictionary, see [Wikit Introduction](https://github.com/ikey4u/wikit/wiki) for detail.
 
