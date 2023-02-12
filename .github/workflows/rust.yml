@@ -35,30 +35,48 @@ jobs:
     - name: Build Wikit Desktop
       working-directory: ./desktop
       run: |
-          cargo install tauri-cli
-          cargo install trunk
+          rustup target add wasm32-unknown-unknown
+          cargo install tauri-cli trunk
           cargo tauri build
-    - name: Archive Linux Production
+
+    - name: Prepare Linux Artifact
+      if: startsWith(matrix.os,'ubuntu')
+      run: |
+        mkdir -p linux-artifact
+        mv target/release/wikit linux-artifact
+        mv target/release/bundle/appimage/wikit*.AppImage linux-artifact
+    - name: Archive Linux Artifact
       if: startsWith(matrix.os,'ubuntu')
       uses: actions/upload-artifact@v2
       with:
-        name: wikit-linux
+        name: linux-artifact
         path: |
-          target/release/wikit
-          target/release/bundle/appimage/wikit*.AppImage
-    - name: Archive MacOS Production
+          linux-artifact
+
+    - name: Prepare Darwin Artifact
+      if: startsWith(matrix.os,'macos')
+      run: |
+        mkdir -p darwin-artifact
+        mv target/release/wikit darwin-artifact
+        mv target/release/bundle/dmg/*.dmg darwin-artifact
+    - name: Archive Darwin Artifact
       if: startsWith(matrix.os, 'macos')
       uses: actions/upload-artifact@v2
       with:
-        name: wikit-macos
+        name: darwin-artifact
         path: |
-          target/release/wikit
-          target/release/bundle/dmg/*.dmg
-    - name: Archive Windows Production
+          darwin-artifact
+
+    - name: Prepare Windows Artifact
+      if: startsWith(matrix.os,'windows')
+      run: |
+        mkdir windows-artifact
+        move target\release\wikit.exe windows-artifact
+        move target\release\bundle\msi\*.msi windows-artifact
+    - name: Archive Windows Artifact
       if: startsWith(matrix.os, 'windows')
       uses: actions/upload-artifact@v2
       with:
-        name: wikit-windows
+        name: windows-artifact
         path: |
-          target/release/wikit.exe
-          target/release/bundle/msi/*.msi
+          windows-artifact
