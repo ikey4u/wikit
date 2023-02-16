@@ -13,6 +13,8 @@ build = "src/build.rs"
 
 [build-dependencies]
 tauri-build = { version = "1.2.1", features = [] }
+tauri-cli  = "1.2.1"
+trunk = "0.16.0"
 
 [dependencies]
 serde_json = "1.0"
