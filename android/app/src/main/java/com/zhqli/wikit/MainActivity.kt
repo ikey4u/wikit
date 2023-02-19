@@ -28,6 +28,10 @@ import androidx.compose.runtime.setValue
 import com.zhqli.wikit.ui.theme.WikitMobileTheme
 import com.zhqli.wikit.ffi.RustBindings
 
+import com.google.accompanist.web.WebView
+import com.google.accompanist.web.WebViewState
+import com.google.accompanist.web.WebContent
+
 class MainActivity: ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +40,8 @@ class MainActivity: ComponentActivity() {
 
         setContent {
             WikitMobileTheme {
+                var meaning: String by rememberSaveable { mutableStateOf("") }
+                val state = WebViewState(WebContent.Data(data = "${meaning}"))
                 Scaffold(
                     topBar = {
                         TopAppBar() {
@@ -45,8 +51,13 @@ class MainActivity: ComponentActivity() {
                 ) { contentPadding ->
                     Box(modifier = Modifier.padding(contentPadding)) {
                         Column() {
-                            SearchAppBar()
-                            Text(text = "${r}")
+                            SearchAppBar() { text ->
+                                meaning = "explain page for <h1 style=\"color: green\">${text}</h1>";
+                            }
+                            WebView(
+                                state = state,
+                                onCreated = { it.settings.javaScriptEnabled = true }
+                            )
                         }
                     }
                 }
@@ -57,7 +68,7 @@ class MainActivity: ComponentActivity() {
 
 // SearchAppBar is referenced from https://github.com/RajashekarRaju/compose-actors
 @Composable
-private fun SearchAppBar() {
+private fun SearchAppBar(onInputChanged: (String) -> Unit) {
     var query: String by rememberSaveable { mutableStateOf("") }
     var showClearIcon by rememberSaveable { mutableStateOf(false) }
 
@@ -71,8 +82,7 @@ private fun SearchAppBar() {
         value = query,
         onValueChange = { onQueryChanged ->
             query = onQueryChanged
-            if (onQueryChanged.isNotEmpty()) {
-            }
+            onInputChanged(onQueryChanged)
         },
         leadingIcon = {
             Icon(
@@ -83,7 +93,10 @@ private fun SearchAppBar() {
         },
         trailingIcon = {
             if (showClearIcon) {
-                IconButton(onClick = { query = "" }) {
+                IconButton(onClick = {
+                    query = ""
+                    onInputChanged("")
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Clear,
                         tint = MaterialTheme.colors.onBackground,
