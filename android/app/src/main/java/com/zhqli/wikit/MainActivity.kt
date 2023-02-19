@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
@@ -21,13 +22,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import com.zhqli.wikit.ui.theme.WikitMobileTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+
+import com.zhqli.wikit.ui.theme.WikitMobileTheme
+import com.zhqli.wikit.ffi.RustBindings
 
 class MainActivity: ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        var g = RustBindings()
+        val r = g.sayHello("wikit")
+
         setContent {
             WikitMobileTheme {
                 Scaffold(
@@ -38,7 +44,10 @@ class MainActivity: ComponentActivity() {
                     }
                 ) { contentPadding ->
                     Box(modifier = Modifier.padding(contentPadding)) {
-                        SearchAppBar()
+                        Column() {
+                            SearchAppBar()
+                            Text(text = "${r}")
+                        }
                     }
                 }
             }

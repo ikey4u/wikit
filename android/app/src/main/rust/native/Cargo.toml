@@ -1,0 +1,13 @@
+[package]
+name = "native"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+name = "native"
+crate-type = ["dylib"]
+
+[dependencies]
+wikit-core = { path = "../../../../../../core" }
+jni = "0.19.0"

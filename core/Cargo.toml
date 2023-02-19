@@ -48,6 +48,8 @@ http = "0.2"
 headers = "0.3"
 wikit-proto = { path = "../proto" }
 log = "0.4"
+# indirect dependencies, but build using source when target is android
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dependencies.nom]
 version = "6"

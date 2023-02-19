@@ -6,6 +6,8 @@ plugins {
 android {
     namespace 'com.zhqli.wikit'
     compileSdk 32
+    buildToolsVersion "31.0.0"
+    ndkVersion "25.1.8937393"
 
     defaultConfig {
         applicationId "com.zhqli.wikit"
@@ -46,8 +48,19 @@ android {
     }
 }
 
-dependencies {
+apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
 
+cargo {
+    module = "${rootDir}/app/src/main/rust/native"
+    libname = "native"
+    targets = ["arm64", "x86", "x86_64", "arm"]
+    prebuiltToolchains = true
+    apiLevel = 21
+}
+
+preBuild.dependsOn "cargoBuild"
+
+dependencies {
     implementation 'androidx.core:core-ktx:1.7.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.3.1'
     implementation 'androidx.activity:activity-compose:1.3.1'
