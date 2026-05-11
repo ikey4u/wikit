@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/ikey4u/wikit/blob/master/desktop/tauri/icons/128x128@2x.png?raw=true" alt="Wikit Application Icon"/>
+  <img src="https://github.com/ikey4u/wikit/blob/master/desktop/electron/icons/128x128@2x.png?raw=true" alt="Wikit Application Icon"/>
 </p>
 <p align="center">
   Wikit is a free and open-source dictionary program that enable you translate word for different languages
@@ -15,7 +15,7 @@ wikit contains the following components
 
 - Wikit Desktop
 
-    Desktop application for Windows, Linux and MacOS which is developed using [tauri](https://tauri.studio/en/) and [yew](https://yew.rs/).
+    Desktop application for Windows, Linux and MacOS built with Electron and a Rust NAPI native module.
 
     ![wikit main screen](./docs/imgs/wikit-main-screen.jpg "wikit main screen")
 
@@ -53,24 +53,7 @@ after that you can open wikit desktop from your dash.
 If you are bother with the manual installation on linux, you can install it from
 [flathub](https://flathub.org/apps/details/com.zhqli.wikit).
 
-**For Windows user, you must additionally install [webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section) and [vc_redist.x86](https://aka.ms/vs/17/release/vc_redist.x86.exe) or [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe).**
-
 # Developement
-
-Install following tools
-
-    cargo install tauri-cli trunk
-
-    # rust for android target
-    rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-
-    # sdkmanager is from cmdline-tools https://developer.android.com/studio/command-line
-    sdkmanager "platforms;android-31" "platform-tools" "build-tools;31.0.0" "cmake;3.22.1" "ndk;25.1.8937393"
-
-Create a file named `.env` under directory `desktop/ui` with content
-
-    BROWSER=none
-    PORT=8080
 
 To develop wikit CLI
 
@@ -79,8 +62,9 @@ To develop wikit CLI
 
 To develop wikit desktop
 
-    cd desktop
-    cargo tauri dev
+    cd desktop/electron
+    npm install
+    npm start
 
 To develop wikit mobile
 
@@ -96,8 +80,9 @@ To build wikit CLI
 
 To build wikit desktop
 
-    cd desktop
-    cargo tauri build
+    cd desktop/electron
+    npm install
+    npm run dist
 
 To build wikit mobile
 

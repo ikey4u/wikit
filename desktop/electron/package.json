@@ -1,0 +1,47 @@
+{
+  "name": "wikit-electron",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Electron shell for Wikit using Rust native module through NAPI",
+  "main": "src/main.js",
+  "scripts": {
+    "build:native": "cd ../native && npm install && npm run build",
+    "start": "npm run build:native && electron .",
+    "dev": "electron .",
+    "pack": "npm run build:native && electron-builder --dir",
+    "dist": "npm run build:native && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.zhqli.wikit",
+    "productName": "Wikit Desktop",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../native",
+        "to": "native",
+        "filter": [
+          "*.node",
+          "index.js",
+          "package.json"
+        ]
+      }
+    ],
+    "mac": {
+      "icon": "icons/icon.icns"
+    },
+    "win": {
+      "icon": "icons/icon.ico"
+    },
+    "linux": {
+      "icon": "icons/128x128.png",
+      "category": "Utility"
+    }
+  }
+}

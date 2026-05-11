@@ -72,29 +72,33 @@ impl Previewer {
 
     pub async fn run(self: Arc<Self>, shutdown_rx: Receiver<()>) -> Result<()> {
         let this = Arc::clone(&self);
-        let wathcer = tokio::spawn(async move {
-            if let Err(e) = this.consumer(shutdown_rx).await {
-                return Err(e);
-            }
-            Ok(())
+        let mut consumer = tokio::spawn(async move {
+            this.consumer(shutdown_rx).await
         });
 
         let this = Arc::clone(&self);
-        let apisrv = tokio::spawn(async move {
-            if let Err(e) = this.producer().await {
-                return Err(e);
-            }
-            Ok(())
+        let mut producer = tokio::spawn(async move {
+            this.producer().await
         });
 
         tokio::select!{
-            Ok(Err(e)) = wathcer => {
-                return Err(WikitError::new(format!("watcher exit with error: {e:?}")))
+            result = &mut consumer => {
+                producer.abort();
+                match result {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(e)) => Err(WikitError::new(format!("consumer exit with error: {e:?}"))),
+                    Err(e) => Err(WikitError::new(format!("consumer task exit with error: {e:?}"))),
+                }
             },
-            Ok(Err(e)) = apisrv => {
-                return Err(WikitError::new(format!("apisrv exit with error: {e:?}")));
+            result = &mut producer => {
+                consumer.abort();
+                match result {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(e)) => Err(WikitError::new(format!("producer exit with error: {e:?}"))),
+                    Err(e) => Err(WikitError::new(format!("producer task exit with error: {e:?}"))),
+                }
             },
-        };
+        }
     }
 
     async fn index(Extension(state): Extension<Arc<Mutex<PreviewerState>>>) -> impl IntoResponse {

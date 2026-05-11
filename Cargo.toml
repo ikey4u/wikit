@@ -1,3 +1,3 @@
 [workspace]
-members = ["cli", "core", "desktop/tauri", "desktop/ui", "proto"]
+members = ["cli", "core", "desktop/native", "proto"]
 exclude = ["android/app/src/main/rust/native"]

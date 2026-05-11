@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: http://127.0.0.1:*; script-src 'self' http://127.0.0.1:*; style-src 'self' 'unsafe-inline' http://127.0.0.1:*; img-src 'self' data: blob: http://127.0.0.1:*; media-src 'self' data: blob: http://127.0.0.1:*; frame-src 'self' data: blob: http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*;">
+    <title>Wikit Desktop</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-titlebar">
+      <div class="app-title">Wikit Desktop</div>
+    </div>
+    <div class="app-shell">
+      <div id="wordPage" class="app-panel">
+        <div id="noDictionary" class="empty-state is-hidden">
+          <div class="empty-card">
+            <div class="empty-kicker">Wikit Desktop</div>
+            <h1>No dictionary found</h1>
+            <p>
+              It seems that you do not install any wikit dictionary, see
+              <a href="https://github.com/ikey4u/wikit/wiki/Home" target="_blank">Wikit Introduction</a>
+              to learn how to install dictionary.
+            </p>
+          </div>
+        </div>
+        <div id="wordContent" class="workspace is-hidden">
+          <div class="toolbar">
+            <div class="field has-addons">
+              <div class="control dictionary-control">
+                <span class="select is-rounded is-small">
+                  <select id="dictSelect"></select>
+                </span>
+              </div>
+              <div class="control search-control has-icons-left is-expanded">
+                <input id="searchInput" class="input is-rounded is-small" autocomplete="none" autocorrect="off" autocapitalize="none" spellcheck="false" type="text" placeholder="Search a word">
+                <span class="icon is-small is-left">⌕</span>
+                <div id="suggestionPopup" class="suggestion-popup is-hidden"></div>
+              </div>
+            </div>
+          </div>
+          <div class="reader-surface">
+            <div id="meaningPlaceholder" class="reader-placeholder">Type a word to look up ...</div>
+            <div id="candidateList" class="candidate-list is-hidden"></div>
+            <div id="noCandidate" class="reader-placeholder is-hidden">Nothing is there ...</div>
+            <iframe id="meaningFrame" class="meaning-frame is-hidden" title="word meaning"></iframe>
+            <iframe id="previewFrame" class="meaning-frame is-hidden" title="wikit live preview"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

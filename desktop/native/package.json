@@ -1,0 +1,19 @@
+{
+  "name": "@wikit/native",
+  "version": "0.1.0",
+  "main": "index.js",
+  "license": "MIT",
+  "napi": {
+    "name": "wikit_native",
+    "triples": {
+      "defaults": true
+    }
+  },
+  "scripts": {
+    "build": "napi build --release --platform",
+    "build:debug": "napi build --platform"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4"
+  }
+}
