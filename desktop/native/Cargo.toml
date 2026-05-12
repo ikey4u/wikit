@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0"
-async-openai = { version = "0.38.0", features = ["chat-completion"] }
+async-openai = { version = "0.38.0", features = ["chat-completion", "byot"] }
 axum = "0.5"
 napi = { version = "2.14.3", features = ["tokio_rt"] }
 napi-derive = "2.14.3"

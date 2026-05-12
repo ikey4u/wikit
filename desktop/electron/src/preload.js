@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('wikit', {
   saveTranslationSettings: (settingsJson) => ipcRenderer.invoke('translation:save-settings', settingsJson),
   translateText: (requestJson) => ipcRenderer.invoke('translation:translate', requestJson),
   testTranslationConnection: (settingsJson) => ipcRenderer.invoke('translation:test-connection', settingsJson),
+  writeClipboardText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   onTranslationSettingsUpdated: (callback) => {
     const listener = (_event, payload) => callback(payload)
     ipcRenderer.on('translation-settings-updated', listener)

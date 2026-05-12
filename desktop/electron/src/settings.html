@@ -21,6 +21,7 @@
           <span>Provider</span>
           <select id="providerSelect">
             <option value="openai-compatible">OpenAI Compatible</option>
+            <option value="deepseek">DeepSeek</option>
             <option value="ollama">Ollama</option>
             <option value="llama-cpp">llama.cpp</option>
             <option value="vllm">vLLM</option>
@@ -33,6 +34,10 @@
         <label class="settings-field">
           <span>Model</span>
           <input id="modelInput" type="text" value="qwen2.5:7b" spellcheck="false">
+          <select id="modelSelect" hidden>
+            <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+            <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+          </select>
         </label>
         <label class="settings-field">
           <span>API Key</span>

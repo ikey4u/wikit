@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, clipboard } = require('electron')
 const path = require('node:path')
 
 const version = '0.5.0'
@@ -21,7 +21,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 740,
-    resizable: false,
+    minWidth: 600,
+    minHeight: 500,
     fullscreen: false,
     title: 'Wikit Desktop',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
@@ -185,6 +186,7 @@ ipcMain.handle('translation:save-settings', (_event, settingsJson) => {
 })
 ipcMain.handle('translation:translate', (_event, requestJson) => getNative().translateText(requestJson))
 ipcMain.handle('translation:test-connection', (_event, settingsJson) => getNative().testTranslationConnection(settingsJson))
+ipcMain.handle('clipboard:write-text', (_event, text) => clipboard.writeText(String(text || '')))
 ipcMain.handle('native:ffi-hello', (_event, name) => getNative().ffiHello(name))
 ipcMain.handle('static:start', () => getNative().startStaticFileServer())
 ipcMain.handle('preview:start', (_event, dir) => getNative().startPreviewServer(dir))

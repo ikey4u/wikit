@@ -30,50 +30,56 @@
         </button>
       </aside>
       <main class="main-region">
-        <div class="app-titlebar">
-          <div class="app-title">Wikit Desktop</div>
-        </div>
         <div class="app-shell">
           <section id="translatePage" class="app-panel translate-page">
             <div class="translate-shell">
-              <div class="translate-header">
-                <div>
-                  <div class="section-kicker">Translate</div>
-                  <h1>文本翻译</h1>
-                </div>
-                <div class="model-pill" id="activeModelLabel">未配置模型</div>
-              </div>
               <div class="translate-controls">
-                <label class="compact-select">
-                  <span>源语言</span>
-                  <select id="sourceLanguageSelect">
-                    <option value="auto">自动检测</option>
-                    <option value="en">English</option>
-                    <option value="zh">中文</option>
-                    <option value="ja">日本語</option>
-                    <option value="ko">한국어</option>
-                  </select>
-                </label>
+                <div class="custom-select language-picker">
+                  <input id="sourceLanguageSelect" type="hidden" value="auto">
+                  <button class="select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="select-caption">源语言</span>
+                    <span class="select-value">自动检测</span>
+                    <span class="select-caret"></span>
+                  </button>
+                  <div class="select-menu" role="listbox">
+                    <button class="select-option is-selected" type="button" role="option" data-value="auto" aria-selected="true">自动检测</button>
+                    <button class="select-option" type="button" role="option" data-value="en">English</button>
+                    <button class="select-option" type="button" role="option" data-value="zh">中文</button>
+                    <button class="select-option" type="button" role="option" data-value="ja">日本語</button>
+                    <button class="select-option" type="button" role="option" data-value="ko">한국어</button>
+                  </div>
+                </div>
                 <span class="language-arrow">→</span>
-                <label class="compact-select">
-                  <span>目标语言</span>
-                  <select id="targetLanguageSelect">
-                    <option value="zh">中文</option>
-                    <option value="en">English</option>
-                    <option value="ja">日本語</option>
-                    <option value="ko">한국어</option>
-                  </select>
-                </label>
+                <div class="custom-select language-picker">
+                  <input id="targetLanguageSelect" type="hidden" value="zh">
+                  <button class="select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="select-caption">目标语言</span>
+                    <span class="select-value">中文</span>
+                    <span class="select-caret"></span>
+                  </button>
+                  <div class="select-menu" role="listbox">
+                    <button class="select-option is-selected" type="button" role="option" data-value="zh" aria-selected="true">中文</button>
+                    <button class="select-option" type="button" role="option" data-value="en">English</button>
+                    <button class="select-option" type="button" role="option" data-value="ja">日本語</button>
+                    <button class="select-option" type="button" role="option" data-value="ko">한국어</button>
+                  </div>
+                </div>
+                <div class="translate-actions">
+                  <button id="translateAction" class="primary-action" type="button">翻译</button>
+                  <button id="clearTranslationAction" class="ghost-action" type="button">清空</button>
+                  <button id="openTranslationSettings" class="ghost-action" type="button">模型设置</button>
+                </div>
               </div>
-              <textarea id="translationInput" class="translation-input" spellcheck="false" placeholder="输入要翻译的文本，按 Cmd/Ctrl + Enter 开始翻译"></textarea>
-              <div class="translate-actions">
-                <button id="translateAction" class="primary-action" type="button">翻译</button>
-                <button id="clearTranslationAction" class="ghost-action" type="button">清空</button>
-                <button id="openTranslationSettings" class="ghost-action" type="button">模型设置</button>
+              <textarea id="translationInput" class="translation-input" spellcheck="false" placeholder="输入要翻译的文本"></textarea>
+              <div id="translationOutput" class="translation-output" tabindex="0">
+                <div class="output-placeholder">输入文本后会自动翻译。</div>
               </div>
-              <div id="translationOutput" class="translation-output">
-                <div class="output-placeholder">选择模型后，翻译结果会显示在这里。</div>
-              </div>
+              <section class="history-panel" aria-label="Translation history">
+                <div class="history-head">
+                  <span>历史翻译</span>
+                </div>
+                <div id="translationHistoryList" class="history-list"></div>
+              </section>
             </div>
           </section>
           <section id="wordPage" class="app-panel word-page is-hidden">

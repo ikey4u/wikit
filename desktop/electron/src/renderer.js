@@ -8,6 +8,7 @@ const translationInput = document.getElementById('translationInput')
 const translateAction = document.getElementById('translateAction')
 const clearTranslationAction = document.getElementById('clearTranslationAction')
 const translationOutput = document.getElementById('translationOutput')
+const translationHistoryList = document.getElementById('translationHistoryList')
 const sourceLanguageSelect = document.getElementById('sourceLanguageSelect')
 const targetLanguageSelect = document.getElementById('targetLanguageSelect')
 const activeModelLabel = document.getElementById('activeModelLabel')
@@ -29,6 +30,20 @@ let previewSocket = null
 let activeMode = 'translate'
 let currentTranslationSettings = null
 let latestTranslation = null
+let translationTimer = null
+let copyFeedbackTimer = null
+
+const translationHistoryKey = 'wikit.translation.history'
+const translationLanguageKey = 'wikit.translation.languages'
+const maxTranslationHistory = 50
+const translationDebounceDelay = 700
+const languageLabels = {
+  auto: '自动检测',
+  zh: '中文',
+  en: 'English',
+  ja: '日本語',
+  ko: '한국어'
+}
 
 function show(element) {
   element.classList.remove('is-hidden')
@@ -190,8 +205,165 @@ function parseJson(value, fallback) {
   }
 }
 
+function getLanguageLabel(value) {
+  return languageLabels[value] || value
+}
+
+function closeCustomSelects(except = null) {
+  document.querySelectorAll('.custom-select.is-open').forEach((select) => {
+    if (select !== except) {
+      select.classList.remove('is-open')
+      const trigger = select.querySelector('.select-trigger')
+      if (trigger) {
+        trigger.setAttribute('aria-expanded', 'false')
+      }
+    }
+  })
+}
+
+function setCustomSelectValue(input, value) {
+  const select = input.closest('.custom-select')
+  if (!select) {
+    input.value = value
+    return
+  }
+  const options = Array.from(select.querySelectorAll('.select-option'))
+  const selected = options.find((option) => option.dataset.value === value) || options[0]
+  if (!selected) {
+    return
+  }
+  input.value = selected.dataset.value
+  const valueLabel = select.querySelector('.select-value')
+  if (valueLabel) {
+    valueLabel.textContent = selected.textContent.trim()
+  }
+  for (const option of options) {
+    const active = option === selected
+    option.classList.toggle('is-selected', active)
+    option.setAttribute('aria-selected', String(active))
+  }
+}
+
+function saveTranslationLanguages() {
+  localStorage.setItem(translationLanguageKey, JSON.stringify({
+    source: sourceLanguageSelect.value,
+    target: targetLanguageSelect.value
+  }))
+}
+
+function loadTranslationLanguages() {
+  const languages = parseJson(localStorage.getItem(translationLanguageKey), {})
+  if (languages && languageLabels[languages.source]) {
+    setCustomSelectValue(sourceLanguageSelect, languages.source)
+  }
+  if (languages && languageLabels[languages.target] && languages.target !== 'auto') {
+    setCustomSelectValue(targetLanguageSelect, languages.target)
+  }
+}
+
+function handleTranslationLanguageChange() {
+  saveTranslationLanguages()
+  scheduleTranslation()
+}
+
+function initCustomSelects() {
+  document.querySelectorAll('.custom-select').forEach((select) => {
+    const input = select.querySelector('input')
+    const trigger = select.querySelector('.select-trigger')
+    const options = Array.from(select.querySelectorAll('.select-option'))
+    if (!input || !trigger || !options.length) {
+      return
+    }
+    setCustomSelectValue(input, input.value)
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation()
+      const open = !select.classList.contains('is-open')
+      closeCustomSelects(select)
+      select.classList.toggle('is-open', open)
+      trigger.setAttribute('aria-expanded', String(open))
+    })
+    trigger.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeCustomSelects()
+      }
+    })
+    for (const option of options) {
+      option.addEventListener('click', (event) => {
+        event.stopPropagation()
+        setCustomSelectValue(input, option.dataset.value)
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+        closeCustomSelects()
+      })
+    }
+  })
+  document.addEventListener('click', () => closeCustomSelects())
+}
+
+function readTranslationHistory() {
+  const history = parseJson(localStorage.getItem(translationHistoryKey), [])
+  return Array.isArray(history) ? history : []
+}
+
+function saveTranslationHistory(history) {
+  localStorage.setItem(translationHistoryKey, JSON.stringify(history.slice(0, maxTranslationHistory)))
+}
+
+function renderTranslationHistory() {
+  translationHistoryList.replaceChildren()
+  const history = readTranslationHistory()
+  if (!history.length) {
+    const empty = document.createElement('div')
+    empty.className = 'history-empty'
+    empty.textContent = '暂无历史记录'
+    translationHistoryList.appendChild(empty)
+    return
+  }
+  for (const item of history) {
+    const button = document.createElement('button')
+    button.className = 'history-item'
+    button.type = 'button'
+    button.addEventListener('click', () => {
+      setCustomSelectValue(sourceLanguageSelect, item.source_language)
+      setCustomSelectValue(targetLanguageSelect, item.target_language)
+      translationInput.value = item.source_text
+      renderTranslationResult(item.translated_text)
+      translationOutput.focus()
+    })
+
+    const meta = document.createElement('div')
+    meta.className = 'history-meta'
+    meta.textContent = `${getLanguageLabel(item.source_language)} → ${getLanguageLabel(item.target_language)}`
+
+    const source = document.createElement('div')
+    source.className = 'history-text'
+    source.textContent = item.source_text
+
+    const target = document.createElement('div')
+    target.className = 'history-result'
+    target.textContent = item.translated_text
+
+    button.append(meta, source, target)
+    translationHistoryList.appendChild(button)
+  }
+}
+
+function addTranslationHistory(record) {
+  const history = readTranslationHistory().filter((item) => (
+    item.source_text !== record.source_text ||
+    item.source_language !== record.source_language ||
+    item.translated_text !== record.translated_text ||
+    item.target_language !== record.target_language
+  ))
+  history.unshift(record)
+  saveTranslationHistory(history)
+  renderTranslationHistory()
+}
+
 function updateActiveModelLabel(settings) {
   currentTranslationSettings = settings
+  if (!activeModelLabel) {
+    return
+  }
   if (!settings || !settings.model) {
     activeModelLabel.textContent = '未配置模型'
     return
@@ -216,6 +388,27 @@ function renderTranslationResult(text) {
   translationOutput.appendChild(result)
 }
 
+function getTranslationOutputText() {
+  const result = translationOutput.querySelector('.translation-result')
+  return result ? result.textContent.trim() : ''
+}
+
+async function copyTranslationOutput() {
+  translationOutput.focus()
+  const text = getTranslationOutputText()
+  if (!text) {
+    return
+  }
+  await window.wikit.writeClipboardText(text)
+  translationOutput.classList.add('is-copied')
+  if (copyFeedbackTimer) {
+    clearTimeout(copyFeedbackTimer)
+  }
+  copyFeedbackTimer = setTimeout(() => {
+    translationOutput.classList.remove('is-copied')
+  }, 900)
+}
+
 function renderTranslationPlaceholder(message) {
   translationOutput.replaceChildren()
   const placeholder = document.createElement('div')
@@ -224,10 +417,35 @@ function renderTranslationPlaceholder(message) {
   translationOutput.appendChild(placeholder)
 }
 
+function scheduleTranslation() {
+  if (activeMode !== 'translate') {
+    return
+  }
+  if (translationTimer) {
+    clearTimeout(translationTimer)
+  }
+  const text = translationInput.value.trim()
+  latestTranslation = Symbol('pending-translation')
+  translateAction.disabled = false
+  translateAction.textContent = '翻译'
+  if (!text) {
+    renderTranslationPlaceholder('输入文本后会自动翻译。')
+    return
+  }
+  translationTimer = setTimeout(() => {
+    requestTranslation()
+  }, translationDebounceDelay)
+}
+
 async function requestTranslation() {
+  if (translationTimer) {
+    clearTimeout(translationTimer)
+    translationTimer = null
+  }
   const text = translationInput.value.trim()
   if (!text) {
-    renderTranslationPlaceholder('请输入要翻译的文本。')
+    latestTranslation = null
+    renderTranslationPlaceholder('输入文本后会自动翻译。')
     return
   }
 
@@ -255,6 +473,13 @@ async function requestTranslation() {
     }
 
     renderTranslationResult(response.text)
+    addTranslationHistory({
+      source_text: text,
+      source_language: sourceLanguageSelect.value,
+      translated_text: response.text,
+      target_language: targetLanguageSelect.value,
+      created_at: new Date().toISOString()
+    })
     updateActiveModelLabel({
       provider: response.provider,
       model: response.model
@@ -272,8 +497,15 @@ async function requestTranslation() {
 }
 
 function clearTranslation() {
+  if (translationTimer) {
+    clearTimeout(translationTimer)
+    translationTimer = null
+  }
+  latestTranslation = null
+  translateAction.disabled = false
+  translateAction.textContent = '翻译'
   translationInput.value = ''
-  renderTranslationPlaceholder('选择模型后，翻译结果会显示在这里。')
+  renderTranslationPlaceholder('输入文本后会自动翻译。')
   translationInput.focus()
 }
 
@@ -341,19 +573,29 @@ async function stopPreviewer() {
   showPlaceholder('Type a word to look up ...')
 }
 
-windowClose.addEventListener('click', () => window.wikit.closeWindow().catch(() => {}))
-windowMinimize.addEventListener('click', () => window.wikit.minimizeWindow().catch(() => {}))
-windowZoom.addEventListener('click', () => window.wikit.zoomWindow().catch(() => {}))
 translateTab.addEventListener('click', () => setActiveMode('translate'))
 dictTab.addEventListener('click', () => setActiveMode('dictionary'))
 settingsButton.addEventListener('click', openSettingsWindow)
 openTranslationSettings.addEventListener('click', openSettingsWindow)
 translateAction.addEventListener('click', requestTranslation)
 clearTranslationAction.addEventListener('click', clearTranslation)
-translationInput.addEventListener('keydown', (event) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+translationInput.addEventListener('input', scheduleTranslation)
+sourceLanguageSelect.addEventListener('change', handleTranslationLanguageChange)
+targetLanguageSelect.addEventListener('change', handleTranslationLanguageChange)
+document.addEventListener('keydown', (event) => {
+  if (activeMode !== 'translate' || event.key !== 'Enter') {
+    return
+  }
+  if (event.metaKey || event.ctrlKey) {
     event.preventDefault()
-    requestTranslation()
+    copyTranslationOutput().catch(() => {})
+    return
+  }
+  const target = event.target
+  const interactive = target.closest && target.closest('button, input, textarea, select, .custom-select')
+  if (!interactive && !event.altKey && !event.shiftKey) {
+    event.preventDefault()
+    translationInput.focus()
   }
 })
 searchInput.addEventListener('input', scheduleLookup)
@@ -366,6 +608,9 @@ window.wikit.onTranslationSettingsUpdated((settingsJson) => {
 window.wikit.startPreviewer = startPreviewer
 window.wikit.stopPreviewer = stopPreviewer
 window.wikit.startStaticFileServer().catch(() => {})
+initCustomSelects()
+loadTranslationLanguages()
+renderTranslationHistory()
 loadDictionaries()
 loadTranslationSettings()
 setActiveMode('translate')

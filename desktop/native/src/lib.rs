@@ -6,6 +6,7 @@ use async_openai::types::chat::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
     CreateChatCompletionRequestArgs,
 };
+use serde_json::{json, Value};
 use async_openai::Client;
 use napi::{Error, Result as NapiResult};
 use napi_derive::napi;
@@ -111,11 +112,29 @@ fn sanitize_translation_settings(mut settings: TranslationSettings) -> Translati
     if settings.provider.is_empty() {
         settings.provider = TranslationSettings::default().provider;
     }
+    if settings.provider == "deepseek" {
+        if settings.endpoint == "https://api.deepseek.com/v1" {
+            settings.endpoint = "https://api.deepseek.com".to_string();
+        }
+        if settings.model == "deepseek-chat"
+            || (settings.model != "deepseek-v4-flash" && settings.model != "deepseek-v4-pro")
+        {
+            settings.model = "deepseek-v4-pro".to_string();
+        }
+    }
     if settings.endpoint.is_empty() {
-        settings.endpoint = TranslationSettings::default().endpoint;
+        settings.endpoint = if settings.provider == "deepseek" {
+            "https://api.deepseek.com".to_string()
+        } else {
+            TranslationSettings::default().endpoint
+        };
     }
     if settings.model.is_empty() {
-        settings.model = TranslationSettings::default().model;
+        settings.model = if settings.provider == "deepseek" {
+            "deepseek-v4-pro".to_string()
+        } else {
+            TranslationSettings::default().model
+        };
     }
     if !(0.0..=2.0).contains(&settings.temperature) {
         settings.temperature = TranslationSettings::default().temperature;
@@ -159,6 +178,7 @@ fn normalized_api_base(settings: &TranslationSettings) -> String {
                 format!("{endpoint}/v1")
             }
         }
+        "deepseek" => endpoint.trim_end_matches("/v1").to_string(),
         _ => endpoint.to_string(),
     }
 }
@@ -199,6 +219,45 @@ async fn translate_with_settings(settings: TranslationSettings, request: Transla
         "You are a professional translation engine. Translate faithfully from {source} to {target}. Preserve meaning, tone, formatting, numbers, URLs, code blocks, and proper nouns. Output only the translation."
     );
     let user_prompt = format!("Text:\n{text}");
+
+    if settings.provider == "deepseek" {
+        let model = settings.model.clone();
+        let mut request = json!({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "stream": false,
+            "temperature": settings.temperature
+        });
+        if request["model"] == "deepseek-v4-pro" {
+            request["reasoning_effort"] = json!("high");
+            request["thinking"] = json!({"type": "enabled"});
+        }
+        let timeout = Duration::from_secs(settings.timeout);
+        let response: Value = tokio::time::timeout(timeout, client.chat().create_byot(request))
+            .await
+            .map_err(|_| anyhow!("translation request timed out"))??;
+        let translated = response
+            .get("choices")
+            .and_then(|choices| choices.get(0))
+            .and_then(|choice| choice.get("message"))
+            .and_then(|message| message.get("content"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if translated.is_empty() {
+            return Err(anyhow!("model returned empty translation"));
+        }
+        return Ok(TranslationResponse {
+            text: translated,
+            provider: settings.provider,
+            model: settings.model,
+        });
+    }
+
     let messages = vec![
         ChatCompletionRequestSystemMessageArgs::default()
             .content(system_prompt)

@@ -20,6 +20,17 @@ body {
   font-size: 14px;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  z-index: 10;
+  -webkit-app-region: drag;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -32,8 +43,15 @@ select {
 
 .settings-shell {
   height: 100%;
-  padding: 38px 28px 24px;
+  padding: 72px 28px 24px;
   overflow-y: auto;
+}
+
+.settings-card,
+.settings-actions,
+.settings-message,
+.settings-state {
+  -webkit-app-region: no-drag;
 }
 
 .settings-header {
@@ -101,11 +119,22 @@ select {
   width: 100%;
   height: 36px;
   border: 1px solid #d7dce4;
-  border-radius: 9px;
+  border-radius: 10px;
   outline: none;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
   color: var(--text);
   padding: 0 11px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.settings-field select {
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #7a8491 50%), linear-gradient(135deg, #7a8491 50%, transparent 50%), linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
+  background-position: calc(100% - 16px) 15px, calc(100% - 11px) 15px, 0 0;
+  background-size: 5px 5px, 5px 5px, 100% 100%;
+  background-repeat: no-repeat;
+  padding-right: 34px;
 }
 
 .settings-field input:focus,
