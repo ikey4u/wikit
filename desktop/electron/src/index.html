@@ -8,46 +8,112 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <div class="app-titlebar">
-      <div class="app-title">Wikit Desktop</div>
-    </div>
-    <div class="app-shell">
-      <div id="wordPage" class="app-panel">
-        <div id="noDictionary" class="empty-state is-hidden">
-          <div class="empty-card">
-            <div class="empty-kicker">Wikit Desktop</div>
-            <h1>No dictionary found</h1>
-            <p>
-              It seems that you do not install any wikit dictionary, see
-              <a href="https://github.com/ikey4u/wikit/wiki/Home" target="_blank">Wikit Introduction</a>
-              to learn how to install dictionary.
-            </p>
-          </div>
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="traffic-spacer"></div>
+        <nav class="sidebar-nav" aria-label="Primary">
+          <button id="translateTab" class="sidebar-tab is-active" type="button" title="Translate" aria-label="Translate">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>
+            </svg>
+          </button>
+          <button id="dictTab" class="sidebar-tab" type="button" title="Dictionary" aria-label="Dictionary">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/>
+            </svg>
+          </button>
+        </nav>
+        <button id="settingsButton" class="sidebar-tab sidebar-settings" type="button" title="Settings" aria-label="Settings">
+          <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </aside>
+      <main class="main-region">
+        <div class="app-titlebar">
+          <div class="app-title">Wikit Desktop</div>
         </div>
-        <div id="wordContent" class="workspace is-hidden">
-          <div class="toolbar">
-            <div class="field has-addons">
-              <div class="control dictionary-control">
-                <span class="select is-rounded is-small">
-                  <select id="dictSelect"></select>
-                </span>
+        <div class="app-shell">
+          <section id="translatePage" class="app-panel translate-page">
+            <div class="translate-shell">
+              <div class="translate-header">
+                <div>
+                  <div class="section-kicker">Translate</div>
+                  <h1>文本翻译</h1>
+                </div>
+                <div class="model-pill" id="activeModelLabel">未配置模型</div>
               </div>
-              <div class="control search-control has-icons-left is-expanded">
-                <input id="searchInput" class="input is-rounded is-small" autocomplete="none" autocorrect="off" autocapitalize="none" spellcheck="false" type="text" placeholder="Search a word">
-                <span class="icon is-small is-left">⌕</span>
-                <div id="suggestionPopup" class="suggestion-popup is-hidden"></div>
+              <div class="translate-controls">
+                <label class="compact-select">
+                  <span>源语言</span>
+                  <select id="sourceLanguageSelect">
+                    <option value="auto">自动检测</option>
+                    <option value="en">English</option>
+                    <option value="zh">中文</option>
+                    <option value="ja">日本語</option>
+                    <option value="ko">한국어</option>
+                  </select>
+                </label>
+                <span class="language-arrow">→</span>
+                <label class="compact-select">
+                  <span>目标语言</span>
+                  <select id="targetLanguageSelect">
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                    <option value="ja">日本語</option>
+                    <option value="ko">한국어</option>
+                  </select>
+                </label>
+              </div>
+              <textarea id="translationInput" class="translation-input" spellcheck="false" placeholder="输入要翻译的文本，按 Cmd/Ctrl + Enter 开始翻译"></textarea>
+              <div class="translate-actions">
+                <button id="translateAction" class="primary-action" type="button">翻译</button>
+                <button id="clearTranslationAction" class="ghost-action" type="button">清空</button>
+                <button id="openTranslationSettings" class="ghost-action" type="button">模型设置</button>
+              </div>
+              <div id="translationOutput" class="translation-output">
+                <div class="output-placeholder">选择模型后，翻译结果会显示在这里。</div>
               </div>
             </div>
-          </div>
-          <div class="reader-surface">
-            <div id="meaningPlaceholder" class="reader-placeholder">Type a word to look up ...</div>
-            <div id="candidateList" class="candidate-list is-hidden"></div>
-            <div id="noCandidate" class="reader-placeholder is-hidden">Nothing is there ...</div>
-            <iframe id="meaningFrame" class="meaning-frame is-hidden" title="word meaning"></iframe>
-            <iframe id="previewFrame" class="meaning-frame is-hidden" title="wikit live preview"></iframe>
-          </div>
+          </section>
+          <section id="wordPage" class="app-panel word-page is-hidden">
+            <div id="noDictionary" class="empty-state is-hidden">
+              <div class="empty-card">
+                <div class="empty-kicker">Wikit Desktop</div>
+                <h1>No dictionary found</h1>
+                <p>
+                  It seems that you do not install any wikit dictionary, see
+                  <a href="https://github.com/ikey4u/wikit/wiki/Home" target="_blank">Wikit Introduction</a>
+                  to learn how to install dictionary.
+                </p>
+              </div>
+            </div>
+            <div id="wordContent" class="workspace is-hidden">
+              <div class="toolbar">
+                <div class="field has-addons">
+                  <div class="control dictionary-control">
+                    <span class="select is-rounded is-small">
+                      <select id="dictSelect"></select>
+                    </span>
+                  </div>
+                  <div class="control search-control has-icons-left is-expanded">
+                    <input id="searchInput" class="input is-rounded is-small" autocomplete="none" autocorrect="off" autocapitalize="none" spellcheck="false" type="text" placeholder="Search a word">
+                    <span class="icon is-small is-left">⌕</span>
+                    <div id="suggestionPopup" class="suggestion-popup is-hidden"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="reader-surface">
+                <div id="meaningPlaceholder" class="reader-placeholder">Type a word to look up ...</div>
+                <div id="candidateList" class="candidate-list is-hidden"></div>
+                <div id="noCandidate" class="reader-placeholder is-hidden">Nothing is there ...</div>
+                <iframe id="meaningFrame" class="meaning-frame is-hidden" title="word meaning"></iframe>
+                <iframe id="previewFrame" class="meaning-frame is-hidden" title="wikit live preview"></iframe>
+              </div>
+            </div>
+          </section>
         </div>
-      </div>
+      </main>
     </div>
     <script src="renderer.js"></script>
   </body>

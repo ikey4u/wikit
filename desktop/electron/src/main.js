@@ -4,6 +4,7 @@ const path = require('node:path')
 const version = '0.5.0'
 let native
 let mainWindow
+let settingsWindow
 let quitting = false
 
 function getNative() {
@@ -24,7 +25,7 @@ function createWindow() {
     fullscreen: false,
     title: 'Wikit Desktop',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 12, y: 11 },
+    trafficLightPosition: { x: 2, y: 2 },
     backgroundColor: '#ffffff',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -69,6 +70,37 @@ function createWindow() {
   })
 }
 
+function createSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus()
+    return
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 520,
+    height: 620,
+    resizable: false,
+    fullscreen: false,
+    title: 'Translation Settings',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    trafficLightPosition: { x: 16, y: 16 },
+    backgroundColor: '#f6f7f9',
+    parent: mainWindow || undefined,
+    modal: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  })
+
+  settingsWindow.loadFile(path.join(__dirname, 'settings.html'))
+  settingsWindow.on('closed', () => {
+    settingsWindow = null
+  })
+}
+
 function createMenu() {
   const template = [
     {
@@ -84,6 +116,10 @@ function createMenu() {
               dialog.showErrorBox('Wikit Desktop', String(error))
             }
           }
+        },
+        {
+          label: 'Translation Settings',
+          click: createSettingsWindow
         },
         { type: 'separator' },
         { role: 'quit', label: 'Quit' }
@@ -139,11 +175,22 @@ function createMenu() {
 
 ipcMain.handle('dict:list', () => getNative().getDictList())
 ipcMain.handle('dict:lookup', (_event, dictid, word) => getNative().lookup(dictid, word))
+ipcMain.handle('translation:get-settings', () => getNative().getTranslationSettings())
+ipcMain.handle('translation:save-settings', (_event, settingsJson) => {
+  const settings = getNative().saveTranslationSettings(settingsJson)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('translation-settings-updated', settings)
+  }
+  return settings
+})
+ipcMain.handle('translation:translate', (_event, requestJson) => getNative().translateText(requestJson))
+ipcMain.handle('translation:test-connection', (_event, settingsJson) => getNative().testTranslationConnection(settingsJson))
 ipcMain.handle('native:ffi-hello', (_event, name) => getNative().ffiHello(name))
 ipcMain.handle('static:start', () => getNative().startStaticFileServer())
 ipcMain.handle('preview:start', (_event, dir) => getNative().startPreviewServer(dir))
 ipcMain.handle('preview:stop', () => getNative().stopPreviewServer())
 ipcMain.handle('preview:is-up', () => getNative().isPreviewServerUp())
+ipcMain.handle('settings:open', () => createSettingsWindow())
 ipcMain.handle('dialog:open-directory', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory']

@@ -9,6 +9,16 @@ contextBridge.exposeInMainWorld('wikit', {
   startPreviewServer: (dir) => ipcRenderer.invoke('preview:start', dir),
   stopPreviewServer: () => ipcRenderer.invoke('preview:stop'),
   isPreviewServerUp: () => ipcRenderer.invoke('preview:is-up'),
+  openSettingsWindow: () => ipcRenderer.invoke('settings:open'),
+  getTranslationSettings: () => ipcRenderer.invoke('translation:get-settings'),
+  saveTranslationSettings: (settingsJson) => ipcRenderer.invoke('translation:save-settings', settingsJson),
+  translateText: (requestJson) => ipcRenderer.invoke('translation:translate', requestJson),
+  testTranslationConnection: (settingsJson) => ipcRenderer.invoke('translation:test-connection', settingsJson),
+  onTranslationSettingsUpdated: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('translation-settings-updated', listener)
+    return () => ipcRenderer.removeListener('translation-settings-updated', listener)
+  },
   emitJsEvent: (payload) => ipcRenderer.send('js-event', payload),
   onRustEvent: (callback) => {
     const listener = (_event, payload) => callback(payload)

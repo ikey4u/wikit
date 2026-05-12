@@ -15,6 +15,10 @@ export interface LookupResponse {
 export function startStaticFileServer(): NapiResult
 export function getDictList(): NapiResult
 export function lookup(dictid: string, word: string): NapiResult
+export function getTranslationSettings(): NapiResult
+export function saveTranslationSettings(settingsJson: string): NapiResult
+export function translateText(requestJson: string): Promise<NapiResult>
+export function testTranslationConnection(settingsJson: string): Promise<NapiResult>
 export function ffiHello(name: string): NapiResult
 export function startPreviewServer(dir: string): NapiResult
 export function stopPreviewServer(): NapiResult

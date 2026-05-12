@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+    <title>Translation Settings</title>
+    <link rel="stylesheet" href="settings.css">
+  </head>
+  <body>
+    <main class="settings-shell">
+      <header class="settings-header">
+        <div>
+          <div class="settings-kicker">Wikit</div>
+          <h1>翻译设置</h1>
+        </div>
+        <div class="settings-state">未连接</div>
+      </header>
+      <section class="settings-card">
+        <label class="settings-field">
+          <span>Provider</span>
+          <select id="providerSelect">
+            <option value="openai-compatible">OpenAI Compatible</option>
+            <option value="ollama">Ollama</option>
+            <option value="llama-cpp">llama.cpp</option>
+            <option value="vllm">vLLM</option>
+          </select>
+        </label>
+        <label class="settings-field">
+          <span>Endpoint</span>
+          <input id="endpointInput" type="text" value="http://127.0.0.1:11434" spellcheck="false">
+        </label>
+        <label class="settings-field">
+          <span>Model</span>
+          <input id="modelInput" type="text" value="qwen2.5:7b" spellcheck="false">
+        </label>
+        <label class="settings-field">
+          <span>API Key</span>
+          <input id="apiKeyInput" type="password" placeholder="外部模型需要，本地模型可留空">
+        </label>
+      </section>
+      <section class="settings-card settings-grid">
+        <label class="settings-field">
+          <span>Temperature</span>
+          <input id="temperatureInput" type="number" min="0" max="2" step="0.1" value="0.2">
+        </label>
+        <label class="settings-field">
+          <span>Timeout</span>
+          <input id="timeoutInput" type="number" min="5" max="300" step="1" value="60">
+        </label>
+      </section>
+      <footer class="settings-actions">
+        <button id="testConnectionButton" class="ghost-action" type="button">测试连接</button>
+        <button id="saveSettingsButton" class="primary-action" type="button">保存设置</button>
+      </footer>
+      <p id="settingsMessage" class="settings-message">第一版设置面板已就绪，后续会接入真实模型配置保存和连接测试。</p>
+    </main>
+    <script src="settings.js"></script>
+  </body>
+</html>

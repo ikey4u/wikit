@@ -1,13 +1,23 @@
-use anyhow::{Context, Result as AnyResult};
+#![allow(unexpected_cfgs)]
+
+use anyhow::{anyhow, Context, Result as AnyResult};
+use async_openai::config::OpenAIConfig;
+use async_openai::types::chat::{
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+    CreateChatCompletionRequestArgs,
+};
+use async_openai::Client;
 use napi::{Error, Result as NapiResult};
 use napi_derive::napi;
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::Path;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use wikit_core::{config, crypto, preview, util, wikit};
 use wikit_core::wikit::WikitDictionary;
 
@@ -33,6 +43,50 @@ pub struct LookupResponse {
     pub style: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct TranslationSettings {
+    provider: String,
+    endpoint: String,
+    model: String,
+    api_key: String,
+    temperature: f32,
+    timeout: u64,
+}
+
+impl Default for TranslationSettings {
+    fn default() -> Self {
+        Self {
+            provider: "ollama".to_string(),
+            endpoint: "http://127.0.0.1:11434".to_string(),
+            model: "qwen2.5:7b".to_string(),
+            api_key: String::new(),
+            temperature: 0.2,
+            timeout: 60,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct TranslationRequest {
+    text: String,
+    source: String,
+    target: String,
+}
+
+#[derive(Debug, Serialize)]
+struct TranslationResponse {
+    text: String,
+    provider: String,
+    model: String,
+}
+
+#[derive(Debug, Serialize)]
+struct TranslationTestResponse {
+    ok: bool,
+    message: String,
+}
+
 fn napi_error<E: std::fmt::Debug>(context: &str, error: E) -> Error {
     Error::from_reason(format!("{context}: {error:?}"))
 }
@@ -43,6 +97,143 @@ fn lock_dictdb() -> NapiResult<std::sync::MutexGuard<'static, HashMap<String, Wi
 
 fn lock_preview_shutdown() -> NapiResult<std::sync::MutexGuard<'static, Option<tokio::sync::broadcast::Sender<()>>>> {
     PREVIEW_SHUTDOWN.lock().map_err(|e| Error::from_reason(format!("failed to lock preview server state: {e}")))
+}
+
+fn translation_config_path() -> AnyResult<PathBuf> {
+    Ok(config::get_config_dir()?.join("translation.toml"))
+}
+
+fn sanitize_translation_settings(mut settings: TranslationSettings) -> TranslationSettings {
+    settings.provider = settings.provider.trim().to_string();
+    settings.endpoint = settings.endpoint.trim().trim_end_matches('/').to_string();
+    settings.model = settings.model.trim().to_string();
+    settings.api_key = settings.api_key.trim().to_string();
+    if settings.provider.is_empty() {
+        settings.provider = TranslationSettings::default().provider;
+    }
+    if settings.endpoint.is_empty() {
+        settings.endpoint = TranslationSettings::default().endpoint;
+    }
+    if settings.model.is_empty() {
+        settings.model = TranslationSettings::default().model;
+    }
+    if !(0.0..=2.0).contains(&settings.temperature) {
+        settings.temperature = TranslationSettings::default().temperature;
+    }
+    settings.timeout = settings.timeout.clamp(5, 300);
+    settings
+}
+
+fn load_translation_settings_inner() -> AnyResult<TranslationSettings> {
+    let path = translation_config_path()?;
+    if !path.exists() {
+        let settings = TranslationSettings::default();
+        let content = toml::to_string_pretty(&settings)?;
+        File::create(&path)?.write_all(content.as_bytes())?;
+        return Ok(settings);
+    }
+
+    let mut content = String::new();
+    File::open(&path)?.read_to_string(&mut content)?;
+    if content.trim().is_empty() {
+        return Ok(TranslationSettings::default());
+    }
+    Ok(sanitize_translation_settings(toml::from_str(&content)?))
+}
+
+fn save_translation_settings_inner(settings: TranslationSettings) -> AnyResult<TranslationSettings> {
+    let settings = sanitize_translation_settings(settings);
+    let path = translation_config_path()?;
+    let content = toml::to_string_pretty(&settings)?;
+    File::create(path)?.write_all(content.as_bytes())?;
+    Ok(settings)
+}
+
+fn normalized_api_base(settings: &TranslationSettings) -> String {
+    let endpoint = settings.endpoint.trim().trim_end_matches('/');
+    match settings.provider.as_str() {
+        "ollama" | "llama-cpp" | "vllm" => {
+            if endpoint.ends_with("/v1") {
+                endpoint.to_string()
+            } else {
+                format!("{endpoint}/v1")
+            }
+        }
+        _ => endpoint.to_string(),
+    }
+}
+
+fn language_name(code: &str) -> &str {
+    match code {
+        "auto" => "the automatically detected source language",
+        "zh" => "Chinese",
+        "en" => "English",
+        "ja" => "Japanese",
+        "ko" => "Korean",
+        "fr" => "French",
+        "de" => "German",
+        "es" => "Spanish",
+        "ru" => "Russian",
+        _ => code,
+    }
+}
+
+async fn translate_with_settings(settings: TranslationSettings, request: TranslationRequest) -> AnyResult<TranslationResponse> {
+    let text = request.text.trim();
+    if text.is_empty() {
+        return Err(anyhow!("translation input is empty"));
+    }
+
+    let api_key = if settings.api_key.is_empty() {
+        "not-needed"
+    } else {
+        settings.api_key.as_str()
+    };
+    let config = OpenAIConfig::new()
+        .with_api_base(normalized_api_base(&settings))
+        .with_api_key(api_key);
+    let client = Client::with_config(config);
+    let source = language_name(&request.source);
+    let target = language_name(&request.target);
+    let system_prompt = format!(
+        "You are a professional translation engine. Translate faithfully from {source} to {target}. Preserve meaning, tone, formatting, numbers, URLs, code blocks, and proper nouns. Output only the translation."
+    );
+    let user_prompt = format!("Text:\n{text}");
+    let messages = vec![
+        ChatCompletionRequestSystemMessageArgs::default()
+            .content(system_prompt)
+            .build()?
+            .into(),
+        ChatCompletionRequestUserMessageArgs::default()
+            .content(user_prompt)
+            .build()?
+            .into(),
+    ];
+    let chat_request = CreateChatCompletionRequestArgs::default()
+        .model(settings.model.clone())
+        .messages(messages)
+        .temperature(settings.temperature)
+        .build()?;
+    let timeout = Duration::from_secs(settings.timeout);
+    let response = tokio::time::timeout(timeout, client.chat().create(chat_request))
+        .await
+        .map_err(|_| anyhow!("translation request timed out"))??;
+    let translated = response
+        .choices
+        .first()
+        .and_then(|choice| choice.message.content.clone())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if translated.is_empty() {
+        return Err(anyhow!("model returned empty translation"));
+    }
+
+    Ok(TranslationResponse {
+        text: translated,
+        provider: settings.provider,
+        model: settings.model,
+    })
 }
 
 fn choose_static_port() -> NapiResult<u16> {
@@ -204,6 +395,61 @@ pub fn lookup(dictid: String, word: String) -> NapiResult<LookupResponse> {
     let script = format!(r#" <script type="text/javascript" src="http://127.0.0.1:{port}/static/{staticid}.js"></script> "#);
 
     Ok(LookupResponse { words, script, style })
+}
+
+#[napi]
+pub fn get_translation_settings() -> NapiResult<String> {
+    let settings = load_translation_settings_inner()
+        .map_err(|e| napi_error("failed to load translation settings", e))?;
+    serde_json::to_string(&settings)
+        .map_err(|e| napi_error("failed to serialize translation settings", e))
+}
+
+#[napi]
+pub fn save_translation_settings(settings_json: String) -> NapiResult<String> {
+    let settings = serde_json::from_str::<TranslationSettings>(&settings_json)
+        .map_err(|e| napi_error("failed to parse translation settings", e))?;
+    let settings = save_translation_settings_inner(settings)
+        .map_err(|e| napi_error("failed to save translation settings", e))?;
+    serde_json::to_string(&settings)
+        .map_err(|e| napi_error("failed to serialize translation settings", e))
+}
+
+#[napi]
+pub async fn translate_text(request_json: String) -> NapiResult<String> {
+    let request = serde_json::from_str::<TranslationRequest>(&request_json)
+        .map_err(|e| napi_error("failed to parse translation request", e))?;
+    let settings = load_translation_settings_inner()
+        .map_err(|e| napi_error("failed to load translation settings", e))?;
+    let response = translate_with_settings(settings, request)
+        .await
+        .map_err(|e| napi_error("translation failed", e))?;
+    serde_json::to_string(&response)
+        .map_err(|e| napi_error("failed to serialize translation response", e))
+}
+
+#[napi]
+pub async fn test_translation_connection(settings_json: String) -> NapiResult<String> {
+    let settings = serde_json::from_str::<TranslationSettings>(&settings_json)
+        .map_err(|e| napi_error("failed to parse translation settings", e))?;
+    let request = TranslationRequest {
+        text: "hello".to_string(),
+        source: "en".to_string(),
+        target: "zh".to_string(),
+    };
+    let result = translate_with_settings(sanitize_translation_settings(settings), request).await;
+    let response = match result {
+        Ok(_) => TranslationTestResponse {
+            ok: true,
+            message: "连接成功".to_string(),
+        },
+        Err(error) => TranslationTestResponse {
+            ok: false,
+            message: format!("连接失败: {error}"),
+        },
+    };
+    serde_json::to_string(&response)
+        .map_err(|e| napi_error("failed to serialize test response", e))
 }
 
 #[napi]

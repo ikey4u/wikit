@@ -310,11 +310,15 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { startStaticFileServer, getDictList, lookup, ffiHello, startPreviewServer, stopPreviewServer, isPreviewServerUp, getConfigDir } = nativeBinding
+const { startStaticFileServer, getDictList, lookup, getTranslationSettings, saveTranslationSettings, translateText, testTranslationConnection, ffiHello, startPreviewServer, stopPreviewServer, isPreviewServerUp, getConfigDir } = nativeBinding
 
 module.exports.startStaticFileServer = startStaticFileServer
 module.exports.getDictList = getDictList
 module.exports.lookup = lookup
+module.exports.getTranslationSettings = getTranslationSettings
+module.exports.saveTranslationSettings = saveTranslationSettings
+module.exports.translateText = translateText
+module.exports.testTranslationConnection = testTranslationConnection
 module.exports.ffiHello = ffiHello
 module.exports.startPreviewServer = startPreviewServer
 module.exports.stopPreviewServer = stopPreviewServer

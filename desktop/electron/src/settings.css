@@ -1,0 +1,157 @@
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --line: #e1e5eb;
+  --accent: #1f7a4d;
+  --accent-strong: #17623d;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.settings-shell {
+  height: 100%;
+  padding: 38px 28px 24px;
+  overflow-y: auto;
+}
+
+.settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.settings-kicker {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-header h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.settings-state {
+  padding: 5px 10px;
+  border: 1px solid #d9eadf;
+  border-radius: 999px;
+  background: #f0f8f3;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-card {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgba(31, 35, 40, 0.04);
+}
+
+.settings-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.settings-field {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-field span {
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.settings-field input,
+.settings-field select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid #d7dce4;
+  border-radius: 9px;
+  outline: none;
+  background: #ffffff;
+  color: var(--text);
+  padding: 0 11px;
+}
+
+.settings-field input:focus,
+.settings-field select:focus {
+  border-color: #aab3c0;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.primary-action,
+.ghost-action {
+  height: 36px;
+  border-radius: 9px;
+  cursor: pointer;
+  padding: 0 15px;
+  font-weight: 650;
+}
+
+.primary-action {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.primary-action:hover {
+  background: var(--accent-strong);
+}
+
+.ghost-action {
+  border: 1px solid #d8dde5;
+  background: #ffffff;
+  color: var(--text);
+}
+
+.ghost-action:hover {
+  background: #f2f4f7;
+}
+
+.settings-message {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
