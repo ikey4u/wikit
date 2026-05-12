@@ -592,8 +592,7 @@ document.addEventListener('keydown', (event) => {
     return
   }
   const target = event.target
-  const interactive = target.closest && target.closest('button, input, textarea, select, .custom-select')
-  if (!interactive && !event.altKey && !event.shiftKey) {
+  if (target !== translationInput && !event.altKey && !event.shiftKey) {
     event.preventDefault()
     translationInput.focus()
   }

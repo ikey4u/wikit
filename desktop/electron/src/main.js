@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, clipboard } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, clipboard, globalShortcut } = require('electron')
+const fs = require('node:fs')
 const path = require('node:path')
 
 const version = '0.5.0'
@@ -6,6 +7,13 @@ let native
 let mainWindow
 let settingsWindow
 let quitting = false
+let registeredToggleAccelerator = null
+
+const defaultAppSettings = {
+  shortcuts: {
+    toggleWindow: 'Alt+1'
+  }
+}
 
 function getNative() {
   if (!native) {
@@ -15,6 +23,95 @@ function getNative() {
     native = require(nativePath)
   }
   return native
+}
+
+function getAppSettingsPath() {
+  return path.join(app.getPath('userData'), 'app-settings.json')
+}
+
+function normalizeToggleAccelerator(accelerator) {
+  const value = String(accelerator || '').trim()
+  if (!value || value === 'Command+Command') {
+    return defaultAppSettings.shortcuts.toggleWindow
+  }
+  return value
+}
+
+function readAppSettings() {
+  try {
+    const content = fs.readFileSync(getAppSettingsPath(), 'utf8')
+    const parsed = JSON.parse(content)
+    return {
+      shortcuts: {
+        toggleWindow: normalizeToggleAccelerator(parsed.shortcuts?.toggleWindow)
+      }
+    }
+  } catch (_error) {
+    return defaultAppSettings
+  }
+}
+
+function writeAppSettings(settings) {
+  const sanitized = {
+    shortcuts: {
+      toggleWindow: normalizeToggleAccelerator(settings.shortcuts?.toggleWindow)
+    }
+  }
+  fs.mkdirSync(path.dirname(getAppSettingsPath()), { recursive: true })
+  fs.writeFileSync(getAppSettingsPath(), JSON.stringify(sanitized, null, 2))
+  return sanitized
+}
+
+function toggleMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  if (mainWindow.isVisible() && mainWindow.isFocused()) {
+    mainWindow.hide()
+    return
+  }
+  mainWindow.show()
+  if (process.platform === 'darwin') {
+    app.dock.show()
+  }
+  mainWindow.focus()
+}
+
+function registerToggleShortcut(accelerator) {
+  if (registeredToggleAccelerator) {
+    globalShortcut.unregister(registeredToggleAccelerator)
+    registeredToggleAccelerator = null
+  }
+
+  if (!accelerator) {
+    return {
+      registered: false,
+      accelerator: '',
+      message: '快捷键为空，未注册。'
+    }
+  }
+
+  try {
+    const ok = globalShortcut.register(accelerator, toggleMainWindow)
+    if (ok) {
+      registeredToggleAccelerator = accelerator
+      return { registered: true, accelerator, message: '快捷键已注册。' }
+    }
+  } catch (error) {
+    return {
+      registered: false,
+      accelerator,
+      message: `快捷键格式无效或不受系统支持：${String(error && error.message ? error.message : error)}`
+    }
+  }
+
+  return { registered: false, accelerator, message: '快捷键注册失败，可能已被系统或其他应用占用。' }
+}
+
+function applyAppShortcuts() {
+  const settings = readAppSettings()
+  return registerToggleShortcut(settings.shortcuts.toggleWindow)
 }
 
 function createWindow() {
@@ -78,11 +175,11 @@ function createSettingsWindow() {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 520,
+    width: 680,
     height: 620,
     resizable: false,
     fullscreen: false,
-    title: 'Translation Settings',
+    title: 'Settings',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },
     backgroundColor: '#f6f7f9',
@@ -187,6 +284,26 @@ ipcMain.handle('translation:save-settings', (_event, settingsJson) => {
 ipcMain.handle('translation:translate', (_event, requestJson) => getNative().translateText(requestJson))
 ipcMain.handle('translation:test-connection', (_event, settingsJson) => getNative().testTranslationConnection(settingsJson))
 ipcMain.handle('clipboard:write-text', (_event, text) => clipboard.writeText(String(text || '')))
+ipcMain.handle('app-settings:get', () => {
+  const settings = readAppSettings()
+  return JSON.stringify({
+    ...settings,
+    shortcutState: registerToggleShortcut(settings.shortcuts.toggleWindow)
+  })
+})
+ipcMain.handle('app-settings:save', (_event, settingsJson) => {
+  let incoming
+  try {
+    incoming = JSON.parse(settingsJson)
+  } catch (_error) {
+    incoming = defaultAppSettings
+  }
+  const settings = writeAppSettings(incoming)
+  return JSON.stringify({
+    ...settings,
+    shortcutState: registerToggleShortcut(settings.shortcuts.toggleWindow)
+  })
+})
 ipcMain.handle('native:ffi-hello', (_event, name) => getNative().ffiHello(name))
 ipcMain.handle('static:start', () => getNative().startStaticFileServer())
 ipcMain.handle('preview:start', (_event, dir) => getNative().startPreviewServer(dir))
@@ -213,6 +330,7 @@ app.whenReady().then(() => {
   getNative().startStaticFileServer()
   createMenu()
   createWindow()
+  applyAppShortcuts()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -223,6 +341,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   quitting = true
+  globalShortcut.unregisterAll()
   try {
     getNative().stopPreviewServer()
   } catch (_error) {

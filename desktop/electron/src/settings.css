@@ -1,5 +1,6 @@
 :root {
   --bg: #f6f7f9;
+  --sidebar: #e9ecef;
   --panel: #ffffff;
   --text: #1f2328;
   --muted: #6b7280;
@@ -20,17 +21,6 @@ body {
   font-size: 14px;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  z-index: 10;
-  -webkit-app-region: drag;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -41,9 +31,66 @@ select {
   font: inherit;
 }
 
-.settings-shell {
+.settings-layout {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  width: 100%;
   height: 100%;
-  padding: 72px 28px 24px;
+  overflow: hidden;
+}
+
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 64px 12px 16px;
+  border-right: 1px solid #d5dbe3;
+  background: linear-gradient(180deg, #eef0f3 0%, #e7e9ec 100%);
+  -webkit-app-region: drag;
+}
+
+.sidebar-spacer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 48px;
+  -webkit-app-region: drag;
+}
+
+.settings-tab {
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+  font-weight: 700;
+  text-align: center;
+  -webkit-app-region: no-drag;
+}
+
+.settings-tab:hover {
+  background: rgba(255, 255, 255, 0.58);
+  color: #1f2328;
+}
+
+.settings-tab.is-active {
+  background: #ffffff;
+  color: #1f2328;
+  box-shadow: 0 1px 8px rgba(31, 35, 40, 0.13);
+}
+
+.settings-content {
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.settings-panel {
+  height: 100%;
+  padding: 58px 28px 24px;
   overflow-y: auto;
 }
 
@@ -142,6 +189,28 @@ select {
   border-color: #aab3c0;
 }
 
+.shortcut-editor {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.shortcut-editor .ghost-action {
+  height: 36px;
+}
+
+.shortcut-note,
+.shortcut-warning {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.shortcut-warning {
+  color: #9a5a00;
+}
+
 .settings-actions {
   display: flex;
   justify-content: flex-end;
@@ -183,4 +252,8 @@ select {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.is-hidden {
+  display: none !important;
 }
