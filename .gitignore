@@ -30,6 +30,7 @@ __pycache__
 xcuserdata
 private
 release
+desktop/native/*.node
 
 
 # Added by cargo
