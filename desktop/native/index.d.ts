@@ -14,6 +14,7 @@ export interface LookupResponse {
 }
 export function startStaticFileServer(): NapiResult
 export function getDictList(): NapiResult
+export function loadLocalDictionary(path: string): NapiResult
 export function lookup(dictid: string, word: string): NapiResult
 export function getTranslationSettings(): NapiResult
 export function saveTranslationSettings(settingsJson: string): NapiResult
@@ -24,3 +25,17 @@ export function startPreviewServer(dir: string): NapiResult
 export function stopPreviewServer(): NapiResult
 export function isPreviewServerUp(): NapiResult
 export function getConfigDir(): NapiResult
+export interface DictInfo {
+  id: string
+  name: string
+  desc: string
+  script: string
+  style: string
+}
+export interface SearchEntry {
+  word: string
+  definition: string
+}
+export function getDictInfo(dictid: string): NapiResult
+export function searchDict(dictid: string, word: string): NapiResult
+export function buildDictionary(srcfile: string, outfile: string, progressCallback: (err: Error | null, value: number) => any): NapiResult

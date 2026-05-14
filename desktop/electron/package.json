@@ -9,6 +9,7 @@
     "build:native": "cd ../native && npm install && npm run build",
     "start": "npm run build:native && electron .",
     "dev": "electron .",
+    "serve": "npm run dev",
     "pack": "npm run build:native && electron-builder --dir",
     "dist": "npm run build:native && electron-builder",
     "dist:mac": "npm run build:native && electron-builder --mac dmg --publish never",
@@ -16,7 +17,8 @@
   },
   "devDependencies": {
     "electron": "^35.0.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "electron-reloader": "^1.2.3"
   },
   "build": {
     "appId": "com.zhqli.wikit",

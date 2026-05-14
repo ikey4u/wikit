@@ -13,7 +13,7 @@ use napi_derive::napi;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
@@ -409,6 +409,50 @@ pub fn get_dict_list() -> NapiResult<Vec<DictMeta>> {
 }
 
 #[napi]
+pub fn load_local_dictionary(path: String) -> NapiResult<DictMeta> {
+    let source_path = PathBuf::from(&path);
+    if !source_path.exists() {
+        return Err(Error::from_reason(format!("dictionary file not found: {path}")));
+    }
+
+    let suffix = source_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let wikit_path = match suffix.as_str() {
+        "wikit" => source_path.clone(),
+        "mdx" => {
+            let cache_dir = config::get_config_dir()
+                .map_err(|e| napi_error("failed to get config directory", e))?
+                .join("local-dictionaries");
+            fs::create_dir_all(&cache_dir)
+                .map_err(|e| napi_error("failed to create local dictionary cache", e))?;
+            let stem = source_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("dictionary");
+            let hash = crypto::md5(path.as_bytes());
+            let out_path = cache_dir.join(format!("{stem}-{hash}.wikit"));
+            wikit::LocalDictionary::create(&source_path, Some(&out_path))
+                .map_err(|e| napi_error("failed to convert mdx dictionary", e))?
+        }
+        _ => {
+            return Err(Error::from_reason(format!("unsupported dictionary type: {suffix}")));
+        }
+    };
+
+    let local = wikit::LocalDictionary::load(&wikit_path)
+        .map_err(|e| napi_error("failed to load local dictionary", e))?;
+    let id = local.path.display().to_string();
+    let name = local.head.name.clone();
+    let mut dictdb = lock_dictdb()?;
+    dictdb.insert(id.clone(), WikitDictionary::Local(local));
+    Ok(DictMeta { name, id })
+}
+
+#[napi]
 pub fn lookup(dictid: String, word: String) -> NapiResult<LookupResponse> {
     let mut words = HashMap::new();
     let mut script = String::new();
@@ -578,4 +622,105 @@ pub fn get_config_dir() -> NapiResult<String> {
     config::get_config_dir()
         .map(|path| path.display().to_string())
         .map_err(|e| napi_error("failed to get config directory", e))
+}
+
+#[napi(object)]
+pub struct DictInfo {
+    pub id: String,
+    pub name: String,
+    pub desc: String,
+    pub script: String,
+    pub style: String,
+}
+
+#[napi(object)]
+pub struct SearchEntry {
+    pub word: String,
+    pub definition: String,
+}
+
+#[napi]
+pub fn get_dict_info(dictid: String) -> NapiResult<DictInfo> {
+    let dictdb = lock_dictdb()?;
+    if let Some(dict) = dictdb.get(&dictid) {
+        match dict {
+            WikitDictionary::Local(ld) => Ok(DictInfo {
+                id: dictid,
+                name: ld.head.name.clone(),
+                desc: ld.head.desc.clone(),
+                script: ld.head.script.clone(),
+                style: ld.head.style.clone(),
+            }),
+            WikitDictionary::Remote(rd) => Ok(DictInfo {
+                id: dictid.clone(),
+                name: dictid.clone(),
+                desc: String::new(),
+                script: rd.get_script(&dictid),
+                style: rd.get_style(&dictid),
+            }),
+        }
+    } else {
+        Err(Error::from_reason(format!("dictionary not found: {dictid}")))
+    }
+}
+
+#[napi]
+pub fn search_dict(dictid: String, word: String) -> NapiResult<Vec<SearchEntry>> {
+    let dictdb = lock_dictdb()?;
+    let mut results = Vec::new();
+    if let Some(dict) = dictdb.get(&dictid) {
+        let entries = match dict {
+            WikitDictionary::Local(ld) => ld.lookup(&word),
+            WikitDictionary::Remote(rd) => rd.lookup(&word, &dictid),
+        };
+        if let Ok(entries) = entries {
+            for (w, def) in entries {
+                results.push(SearchEntry { word: w, definition: def });
+            }
+        }
+    }
+    Ok(results)
+}
+
+use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+
+#[napi]
+pub fn build_dictionary(
+    srcfile: String,
+    outfile: String,
+    progress_callback: ThreadsafeFunction<f64>,
+) -> NapiResult<String> {
+    let srcfile_path = PathBuf::from(&srcfile);
+    let outfile_path = PathBuf::from(&outfile);
+
+    if !srcfile_path.exists() {
+        return Err(Error::from_reason(format!("source file not found: {srcfile}")));
+    }
+
+    progress_callback.call(Ok(0.05f64), ThreadsafeFunctionCallMode::Blocking);
+
+    let suffix = srcfile_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if suffix == "txt" || suffix == "mdx" {
+    } else {
+        return Err(Error::from_reason(format!("unsupported source type: {}", suffix)));
+    }
+
+    let result = wikit::LocalDictionary::create(&srcfile_path, Some(&outfile_path));
+    progress_callback.call(Ok(0.5f64), ThreadsafeFunctionCallMode::Blocking);
+
+    match result {
+        Ok(path) => {
+            progress_callback.call(Ok(1.0f64), ThreadsafeFunctionCallMode::Blocking);
+            Ok(serde_json::json!({"ok": true, "output": path.display().to_string()}).to_string())
+        }
+        Err(e) => {
+            progress_callback.call(Ok(1.0f64), ThreadsafeFunctionCallMode::Blocking);
+            Ok(serde_json::json!({"ok": false, "error": e.to_string()}).to_string())
+        }
+    }
 }

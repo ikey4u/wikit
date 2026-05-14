@@ -2,6 +2,12 @@ const { app, BrowserWindow, Menu, ipcMain, shell, dialog, clipboard, globalShort
 const fs = require('node:fs')
 const path = require('node:path')
 
+try {
+  require('electron-reloader')(module, {
+    ignore: ['node_modules', 'native', 'icons', 'scripts']
+  })
+} catch (_) {}
+
 const version = '0.5.0'
 let native
 let mainWindow
@@ -272,7 +278,10 @@ function createMenu() {
 }
 
 ipcMain.handle('dict:list', () => getNative().getDictList())
+ipcMain.handle('dict:load-local', (_event, filePath) => getNative().loadLocalDictionary(String(filePath)))
 ipcMain.handle('dict:lookup', (_event, dictid, word) => getNative().lookup(dictid, word))
+ipcMain.handle('dict:get-info', (_event, dictid) => getNative().getDictInfo(dictid))
+ipcMain.handle('dict:search', (_event, dictid, word) => getNative().searchDict(dictid, word))
 ipcMain.handle('translation:get-settings', () => getNative().getTranslationSettings())
 ipcMain.handle('translation:save-settings', (_event, settingsJson) => {
   const settings = getNative().saveTranslationSettings(settingsJson)
@@ -284,6 +293,10 @@ ipcMain.handle('translation:save-settings', (_event, settingsJson) => {
 ipcMain.handle('translation:translate', (_event, requestJson) => getNative().translateText(requestJson))
 ipcMain.handle('translation:test-connection', (_event, settingsJson) => getNative().testTranslationConnection(settingsJson))
 ipcMain.handle('clipboard:write-text', (_event, text) => clipboard.writeText(String(text || '')))
+ipcMain.handle('shell:reveal-path', (_event, targetPath) => {
+  shell.showItemInFolder(String(targetPath || ''))
+  return true
+})
 ipcMain.handle('app-settings:get', () => {
   const settings = readAppSettings()
   return JSON.stringify({
@@ -321,9 +334,83 @@ ipcMain.handle('dialog:open-directory', async () => {
 
   return result.filePaths[0]
 })
+ipcMain.handle('dialog:open-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Dictionary Files', extensions: ['txt', 'csv', 'wikit', 'mdx', 'md'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return result.filePaths[0]
+})
 ipcMain.on('js-event', (event, payload) => {
   console.log(`got js-event with message '${JSON.stringify(payload)}'`)
   event.sender.send('rust-event', 'something else')
+})
+ipcMain.handle('fs:read-text-file', async (_event, filePath) => {
+  try {
+    return fs.readFileSync(String(filePath), 'utf8')
+  } catch (_error) {
+    return null
+  }
+})
+ipcMain.handle('fs:write-text-file', async (_event, filePath, content) => {
+  try {
+    const dir = path.dirname(String(filePath))
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(String(filePath), String(content || ''), 'utf8')
+    return true
+  } catch (error) {
+    return false
+  }
+})
+ipcMain.handle('fs:copy-file', async (_event, src, dst) => {
+  try {
+    const dir = path.dirname(String(dst))
+    fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(String(src), String(dst))
+    return true
+  } catch (error) {
+    return false
+  }
+})
+ipcMain.handle('dict:build-wikit', async (event, srcfile, outfile) => {
+  try {
+    const native = getNative()
+    let resolved = false
+    const result = await new Promise((resolve, reject) => {
+      const raw = native.buildDictionary(
+        String(srcfile),
+        String(outfile),
+        (_err, progress) => {
+          if (!resolved && event && !event.sender.isDestroyed()) {
+            event.sender.send('dict:build-progress', progress)
+          }
+        },
+        (_err, data) => {
+          if (!resolved) {
+            resolved = true
+            if (_err) reject(_err)
+            else resolve(JSON.parse(data))
+          }
+        }
+      )
+      if (!resolved) {
+        resolved = true
+        resolve(JSON.parse(raw))
+      }
+    })
+    return result
+  } catch (error) {
+    console.error('build wikit failed:', error)
+    return { ok: false, error: error.message || 'Unknown error' }
+  }
 })
 
 app.whenReady().then(() => {

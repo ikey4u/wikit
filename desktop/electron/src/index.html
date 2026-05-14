@@ -22,6 +22,11 @@
               <path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/>
             </svg>
           </button>
+          <button id="toolsTab" class="sidebar-tab" type="button" title="Tools" aria-label="Tools">
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+          </button>
         </nav>
         <button id="settingsButton" class="sidebar-tab sidebar-settings" type="button" title="Settings" aria-label="Settings">
           <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -118,8 +123,230 @@
               </div>
             </div>
           </section>
+          <section id="toolsPage" class="app-panel tools-page is-hidden">
+            <div class="tools-header">
+              <div class="tools-tab-bar">
+                <button id="dictMakerTab" class="tools-inner-tab is-active" type="button" data-tool="dict-maker">词典制作</button>
+                <button id="dictEditorTab" class="tools-inner-tab" type="button" data-tool="dict-editor">词典编辑</button>
+                <button id="mdxConverterTab" class="tools-inner-tab" type="button" data-tool="mdx-converter">MDX 转换</button>
+                <button id="moreToolsTab" class="tools-inner-tab tools-more-tab is-hidden" type="button" aria-haspopup="true">
+                  ...
+                  <div class="tools-more-menu" role="menu"></div>
+                </button>
+              </div>
+            </div>
+            <div class="tools-content">
+              <div id="dictMakerContent" class="tool-content">
+                <div class="dm-topbar">
+                  <button id="openDictDir" class="dm-dir-btn" type="button" title="Open Dictionary Directory">选择词典目录</button>
+                  <div style="flex:1"></div>
+                  <button id="addEntryBtn" class="dm-add-btn" type="button">+ 添加词条</button>
+                  <button id="batchImportBtn" class="dm-import-btn" type="button">批量导入</button>
+                </div>
+                <div class="dm-body">
+                  <div class="dm-sidebar">
+                    <div class="dm-sidebar-actions">
+                      <button id="editMetaBtn" class="dm-dir-btn" type="button">元信息</button>
+                    </div>
+                    <div class="dm-search-wrap">
+                      <input id="dictMakerSearch" class="dm-search" type="text" placeholder="搜索词条...">
+                    </div>
+                    <div id="entriesList" class="entries-list">
+                      <div class="entries-empty">请先选择词典目录</div>
+                    </div>
+                  </div>
+                  <div class="dm-editor">
+                    <div class="dm-editor-toolbar">
+                      <div class="editor-tabs">
+                        <button class="editor-tab is-active" type="button" data-editor="content">内容</button>
+                        <button class="editor-tab" type="button" data-editor="css">CSS</button>
+                        <button class="editor-tab" type="button" data-editor="js">JS</button>
+                      </div>
+                      <div class="editor-type-selector">
+                        <select id="contentType">
+                          <option value="html">HTML</option>
+                          <option value="markdown">Markdown</option>
+                        </select>
+                        <button id="togglePreviewBtn" class="dm-preview-btn" type="button">预览</button>
+                      </div>
+                    </div>
+                    <div id="dmEditMode" class="dm-edit-pane">
+                      <div id="contentEditor" class="code-editor" contenteditable="true" spellcheck="false"></div>
+                      <div id="cssEditor" class="code-editor is-hidden" contenteditable="true" spellcheck="false"></div>
+                      <div id="jsEditor" class="code-editor is-hidden" contenteditable="true" spellcheck="false"></div>
+                    </div>
+                    <div id="dmPreviewMode" class="dm-preview-pane is-hidden">
+                      <div class="preview-options">
+                        <label class="preview-toggle"><input type="checkbox" id="showCssPreview" checked><span>CSS</span></label>
+                        <label class="preview-toggle"><input type="checkbox" id="showJsPreview" checked><span>JS</span></label>
+                      </div>
+                      <iframe id="previewIframe" class="preview-frame-full" title="dictionary preview"></iframe>
+                    </div>
+                  </div>
+                </div>
+                <div class="dm-bottombar">
+                  <button id="saveEntryBtn" class="primary-action" type="button">保存</button>
+                  <button id="deleteEntryBtn" class="ghost-action" type="button">删除</button>
+                  <span id="saveStatus" class="save-status"></span>
+                  <div style="flex:1"></div>
+                  <button id="buildDictBtn" class="primary-action" type="button">构建词典</button>
+                </div>
+              </div>
+              <div id="dictEditorContent" class="tool-content is-hidden">
+                <div class="de-topbar">
+                  <select id="deDictSelect" class="de-dict-select">
+                    <option value="">选择词典...</option>
+                  </select>
+                  <button id="deOpenLocalDictBtn" class="de-meta-btn" type="button">选择本地词典</button>
+                  <div style="flex:1"></div>
+                  <button id="deEditMetaBtn" class="de-meta-btn is-hidden" type="button">元信息</button>
+                </div>
+                <div class="de-body">
+                  <div class="de-sidebar">
+                    <div class="de-search-wrap">
+                      <input id="deSearchInput" class="de-search" type="text" placeholder="搜索词条..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+                    </div>
+                    <div id="deEntryList" class="de-entry-list">
+                      <div class="de-empty">请选择词典</div>
+                    </div>
+                  </div>
+                  <div class="de-main">
+                    <div class="de-editor-toolbar">
+                      <div class="de-editor-tabs">
+                        <button class="de-editor-tab is-active" type="button" data-de-editor="html">内容</button>
+                        <button class="de-editor-tab" type="button" data-de-editor="css">CSS</button>
+                        <button class="de-editor-tab" type="button" data-de-editor="js">JS</button>
+                      </div>
+                      <div class="de-editor-actions">
+                        <button id="deTogglePreviewBtn" class="dm-preview-btn" type="button">预览</button>
+                        <select id="deForceFormatSelect" class="de-format-select" title="强制指定预览格式">
+                          <option value="html">HTML</option>
+                          <option value="txt">TXT</option>
+                          <option value="md">MD</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div id="deEditMode" class="de-edit-pane">
+                      <div id="deHtmlEditor" class="code-editor de-code-editor" contenteditable="true" spellcheck="false"></div>
+                      <div id="deCssEditor" class="code-editor de-code-editor is-hidden" contenteditable="true" spellcheck="false"></div>
+                      <div id="deJsEditor" class="code-editor de-code-editor is-hidden" contenteditable="true" spellcheck="false"></div>
+                    </div>
+                    <div id="dePreviewMode" class="de-preview-pane is-hidden">
+                      <iframe id="deViewer" class="de-viewer" title="entry viewer"></iframe>
+                    </div>
+                  </div>
+                </div>
+                <div class="de-bottombar">
+                  <button id="deSaveBtn" class="primary-action" type="button" disabled>保存</button>
+                  <span id="deSaveStatus" class="save-status"></span>
+                  <div style="flex:1"></div>
+                  <button id="deExportBtn" class="ghost-action" type="button">导出为 wikit</button>
+                </div>
+              </div>
+              <div id="mdxConverterContent" class="tool-content is-hidden">
+                <div class="mdx-converter-placeholder">
+                  <p>拖拽 MDX 文件到此处，或点击选择文件</p>
+                  <button id="selectMdxFile" class="primary-action" type="button">选择 MDX 文件</button>
+                  <div id="mdxConverterProgress" class="mdx-converter-progress is-hidden">
+                    <div class="dm-progress-fill"></div>
+                    <span class="dm-progress-text">0%</span>
+                  </div>
+                  <div id="mdxConverterStatus" class="mdx-converter-status"></div>
+                  <button id="openMdxOutputBtn" class="ghost-action is-hidden" type="button">打开产物位置</button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
+    </div>
+    <div id="dmPromptOverlay" class="dm-prompt-overlay is-hidden">
+      <div class="dm-prompt-dialog">
+        <div id="dmPromptLabel" class="dm-prompt-label"></div>
+        <input id="dmPromptInput" class="dm-prompt-input" type="text" autocomplete="off">
+        <div class="dm-prompt-actions">
+          <button id="dmPromptCancel" class="dm-prompt-btn dm-prompt-cancel" type="button">取消</button>
+          <button id="dmPromptOk" class="dm-prompt-btn dm-prompt-ok" type="button">确定</button>
+        </div>
+      </div>
+    </div>
+    <div id="batchImportOverlay" class="dm-prompt-overlay is-hidden">
+      <div class="dm-prompt-dialog">
+        <div class="dm-prompt-label">批量导入</div>
+        <textarea id="batchImportText" class="dm-batch-textarea" placeholder="粘贴 wikit 源文件内容&#10;格式: keyword\nbody\n&lt;/&gt;&#10;每条词条以 &lt;/&gt; 分隔"></textarea>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="batchImportFileBtn" class="dm-prompt-btn dm-prompt-cancel" type="button">选择文件</button>
+          <span id="batchImportFileName" class="dm-batch-filename"></span>
+        </div>
+        <div class="dm-prompt-actions">
+          <button id="batchImportCancel" class="dm-prompt-btn dm-prompt-cancel" type="button">取消</button>
+          <button id="batchImportConfirm" class="dm-prompt-btn dm-prompt-ok" type="button">导入</button>
+        </div>
+      </div>
+    </div>
+    <div id="metaEditOverlay" class="dm-prompt-overlay is-hidden">
+      <div class="dm-meta-dialog">
+        <div class="dm-meta-title">词典元信息</div>
+        <div class="dm-meta-fields">
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">名称</label>
+            <input id="metaName" class="dm-meta-input" type="text" placeholder="词典名称">
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">版本</label>
+            <input id="metaVersion" class="dm-meta-input" type="text" placeholder="1.0">
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">作者</label>
+            <input id="metaAuthors" class="dm-meta-input" type="text" placeholder="逗号分隔，如: Alice, Bob">
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">发行方</label>
+            <input id="metaDistributors" class="dm-meta-input" type="text" placeholder="逗号分隔">
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">描述</label>
+            <input id="metaDescription" class="dm-meta-input" type="text" placeholder="词典描述">
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">主页</label>
+            <input id="metaHomepage" class="dm-meta-input" type="text" placeholder="https://...">
+          </div>
+        </div>
+        <div class="dm-prompt-actions">
+          <button id="metaEditCancel" class="dm-prompt-btn dm-prompt-cancel" type="button">取消</button>
+          <button id="metaEditSave" class="dm-prompt-btn dm-prompt-ok" type="button">保存</button>
+        </div>
+      </div>
+    </div>
+    <div id="deMetaOverlay" class="dm-prompt-overlay is-hidden">
+      <div class="dm-meta-dialog">
+        <div class="dm-meta-header">
+          <div class="dm-meta-title">词典元信息</div>
+          <button id="deMetaCloseTop" class="dm-meta-close" type="button">关闭</button>
+        </div>
+        <div class="dm-meta-fields">
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">名称</label>
+            <input id="deMetaName" class="dm-meta-input" type="text" readonly>
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">描述</label>
+            <input id="deMetaDesc" class="dm-meta-input" type="text" readonly>
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">CSS</label>
+            <textarea id="deMetaCss" class="dm-batch-textarea" rows="5" readonly></textarea>
+          </div>
+          <div class="dm-meta-field">
+            <label class="dm-meta-label">JS</label>
+            <textarea id="deMetaJs" class="dm-batch-textarea" rows="5" readonly></textarea>
+          </div>
+        </div>
+        <div class="dm-prompt-actions">
+          <button id="deMetaClose" class="dm-prompt-btn dm-prompt-cancel" type="button">关闭</button>
+        </div>
+      </div>
     </div>
     <script src="renderer.js"></script>
   </body>
