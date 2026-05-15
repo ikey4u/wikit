@@ -5,11 +5,18 @@ const { join, resolve } = require('node:path')
 const projectDir = resolve(__dirname, '..')
 const distDir = join(projectDir, 'dist')
 
+// Ad-hoc sign only: no Developer ID. Users must allow the app in System Settings.
+const buildEnv = {
+  ...process.env,
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+}
+
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
     cwd,
     stdio: 'inherit',
-    shell: process.platform === 'win32'
+    shell: process.platform === 'win32',
+    env: buildEnv
   })
 
   if (result.status !== 0) {

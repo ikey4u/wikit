@@ -12,7 +12,7 @@
     "serve": "npm run dev",
     "pack": "npm run build:native && electron-builder --dir",
     "dist": "npm run build:native && electron-builder",
-    "dist:mac": "npm run build:native && electron-builder --mac dmg --publish never",
+    "dist:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false npm run build:native && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --publish never",
     "build:dmg": "node scripts/build-dmg.js"
   },
   "devDependencies": {
@@ -44,7 +44,8 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.reference"
+      "category": "public.app-category.reference",
+      "gatekeeperAssess": false
     },
     "dmg": {
       "icon": "icons/icon.icns",

@@ -38,4 +38,4 @@ export interface SearchEntry {
 }
 export function getDictInfo(dictid: string): NapiResult
 export function searchDict(dictid: string, word: string): NapiResult
-export function buildDictionary(srcfile: string, outfile: string, progressCallback: (err: Error | null, value: number) => any): NapiResult
+export function buildDictionary(srcfile: string, outfile: string, progressCallback: (err: Error | null, value: number) => any): Promise<NapiResult>
