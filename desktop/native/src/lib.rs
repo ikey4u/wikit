@@ -447,6 +447,9 @@ pub fn load_local_dictionary(path: String) -> NapiResult<DictMeta> {
         .map_err(|e| napi_error("failed to load local dictionary", e))?;
     let id = local.path.display().to_string();
     let name = local.head.name.clone();
+    config::register_client_dictionary_uri(&wikit_path)
+        .map_err(|e| napi_error("failed to register dictionary in config", e))?;
+
     let mut dictdb = lock_dictdb()?;
     dictdb.insert(id.clone(), WikitDictionary::Local(local));
     Ok(DictMeta { name, id })

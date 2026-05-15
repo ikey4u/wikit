@@ -475,6 +475,10 @@ a:hover {
   overflow: hidden;
 }
 
+.word-page:has(#noDictionary:not(.is-hidden)) {
+  padding: 0;
+}
+
 .app-panel,
 .workspace {
   width: 100%;
@@ -532,6 +536,86 @@ a:hover {
 .dictionary-control {
   flex: 0 0 auto;
   border-right: 1px solid #e0e4ea;
+}
+
+.dict-add-control {
+  flex: 0 0 auto;
+  position: relative;
+  border-left: 1px solid #e0e4ea;
+}
+
+.dict-add-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dict-add-btn:hover,
+.dict-add-btn[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dict-add-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dict-add-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(31, 35, 40, 0.12);
+}
+
+.dict-add-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dict-add-menu-item:hover {
+  background: var(--hover);
+}
+
+.dict-toolbar-status {
+  width: min(780px, calc(100vw - 156px));
+  margin: 10px auto 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  background: #f6f7f9;
+}
+
+.dict-toolbar-status.is-error {
+  color: #912018;
+  background: #fef3f2;
+}
+
+.dict-toolbar-status.is-success {
+  color: #05603a;
+  background: #ecfdf3;
 }
 
 .input,
@@ -738,42 +822,205 @@ a:hover {
   background: var(--hover);
 }
 
-.empty-state {
-  display: grid;
-  place-items: center;
+.dict-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
-  padding: 24px;
+  min-height: 0;
+  padding: 32px 24px;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(31, 122, 77, 0.07), transparent 70%),
+    linear-gradient(180deg, #fafbfc 0%, #ffffff 42%);
 }
 
-.empty-card {
-  max-width: 560px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+.dict-empty-card {
+  width: min(100%, 440px);
+  padding: 36px 32px 28px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(31, 35, 40, 0.04),
+    0 12px 40px rgba(31, 35, 40, 0.06);
   text-align: center;
 }
 
-.empty-kicker {
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+.dict-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, var(--accent-soft) 0%, #f4fbf7 100%);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(31, 122, 77, 0.12);
 }
 
-.empty-card h1 {
-  margin: 0 0 10px;
-  font-size: 24px;
-  line-height: 1.2;
+.dict-empty-icon svg {
+  width: 40px;
+  height: 40px;
+}
+
+.dict-empty-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.dict-empty-desc {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.dict-empty-imports {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.dict-empty-import {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.dict-empty-import:hover {
+  border-color: rgba(31, 122, 77, 0.35);
+  background: #fbfefc;
+  box-shadow: 0 4px 14px rgba(31, 122, 77, 0.08);
+}
+
+.dict-empty-import:active {
+  transform: translateY(1px);
+}
+
+.dict-empty-import:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.dict-empty-import-badge {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.dict-empty-import-badge.is-mdx {
+  background: #eef4ff;
+  color: #3559b8;
+}
+
+.dict-empty-import-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dict-empty-import-copy strong {
+  font-size: 14px;
   font-weight: 650;
+  color: var(--text);
 }
 
-.empty-card p {
-  margin: 0;
+.dict-empty-import-copy span {
+  font-size: 12px;
   color: var(--muted);
-  line-height: 1.6;
+}
+
+.dict-empty-import-arrow {
+  width: 18px;
+  height: 18px;
+  color: #9aa3af;
+  flex-shrink: 0;
+}
+
+.dict-empty-import:hover .dict-empty-import-arrow {
+  color: var(--accent);
+}
+
+.dict-empty-status {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  background: #f6f7f9;
+}
+
+.dict-empty-status.is-error {
+  color: #912018;
+  background: #fef3f2;
+}
+
+.dict-empty-status.is-success {
+  color: #05603a;
+  background: #ecfdf3;
+}
+
+.dict-empty-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.dict-empty-footer-btn,
+.dict-empty-footer-link {
+  border: 0;
+  background: transparent;
+  padding: 10px 2px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.dict-empty-footer-btn:hover,
+.dict-empty-footer-link:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.dict-empty-footer-sep {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c5ccd6;
 }
 
 .is-hidden {

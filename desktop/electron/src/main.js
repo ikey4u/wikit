@@ -277,6 +277,15 @@ function createMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+ipcMain.handle('app:open-config-dir', async () => {
+  try {
+    const configDir = getNative().getConfigDir()
+    await shell.openPath(configDir)
+    return true
+  } catch (error) {
+    return false
+  }
+})
 ipcMain.handle('dict:list', () => getNative().getDictList())
 ipcMain.handle('dict:load-local', (_event, filePath) => getNative().loadLocalDictionary(String(filePath)))
 ipcMain.handle('dict:lookup', (_event, dictid, word) => getNative().lookup(dictid, word))

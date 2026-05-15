@@ -88,15 +88,45 @@
             </div>
           </section>
           <section id="wordPage" class="app-panel word-page is-hidden">
-            <div id="noDictionary" class="empty-state is-hidden">
-              <div class="empty-card">
-                <div class="empty-kicker">Wikit Desktop</div>
-                <h1>No dictionary found</h1>
-                <p>
-                  It seems that you do not install any wikit dictionary, see
-                  <a href="https://github.com/ikey4u/wikit/wiki/Home" target="_blank">Wikit Introduction</a>
-                  to learn how to install dictionary.
-                </p>
+            <div id="noDictionary" class="dict-empty is-hidden">
+              <div class="dict-empty-card">
+                <div class="dict-empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" fill="none">
+                    <path d="M10 8h12a4 4 0 0 1 4 4v28H14a4 4 0 0 1-4-4V8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M22 8h12a4 4 0 0 1 4 4v28H26a4 4 0 0 1-4-4V8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M14 16h8M14 22h8M26 16h8M26 22h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <h2 class="dict-empty-title">添加你的第一本词典</h2>
+                <p class="dict-empty-desc">从本机选择词典文件，导入后即可开始查词。</p>
+                <div class="dict-empty-imports">
+                  <button id="importWikitDictBtn" class="dict-empty-import" type="button">
+                    <span class="dict-empty-import-badge">WIKIT</span>
+                    <span class="dict-empty-import-copy">
+                      <strong>导入 Wikit 词典</strong>
+                      <span>.wikit 本地词典包</span>
+                    </span>
+                    <svg class="dict-empty-import-arrow" viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button id="importMdxDictBtn" class="dict-empty-import" type="button">
+                    <span class="dict-empty-import-badge is-mdx">MDX</span>
+                    <span class="dict-empty-import-copy">
+                      <strong>导入 MDX 词典</strong>
+                      <span>自动转换后加载</span>
+                    </span>
+                    <svg class="dict-empty-import-arrow" viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+                <p id="importDictStatus" class="dict-empty-status is-hidden" role="status"></p>
+                <div class="dict-empty-footer">
+                  <button id="openConfigDirBtn" class="dict-empty-footer-btn" type="button">配置目录</button>
+                  <span class="dict-empty-footer-sep" aria-hidden="true"></span>
+                  <a class="dict-empty-footer-link" href="https://github.com/ikey4u/wikit/wiki/Home" target="_blank" rel="noopener">安装说明</a>
+                </div>
               </div>
             </div>
             <div id="wordContent" class="workspace is-hidden">
@@ -112,7 +142,19 @@
                     <span class="icon is-small is-left">⌕</span>
                     <div id="suggestionPopup" class="suggestion-popup is-hidden"></div>
                   </div>
+                  <div class="control dict-add-control">
+                    <button id="addDictMenuBtn" class="dict-add-btn" type="button" title="添加词典" aria-label="添加词典" aria-haspopup="menu" aria-expanded="false">
+                      <svg viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                      </svg>
+                    </button>
+                    <div id="addDictMenu" class="dict-add-menu is-hidden" role="menu">
+                      <button id="toolbarImportWikitBtn" class="dict-add-menu-item" type="button" role="menuitem">导入 Wikit 词典 (.wikit)</button>
+                      <button id="toolbarImportMdxBtn" class="dict-add-menu-item" type="button" role="menuitem">导入 MDX 词典 (.mdx)</button>
+                    </div>
+                  </div>
                 </div>
+                <p id="toolbarImportStatus" class="dict-toolbar-status is-hidden" role="status"></p>
               </div>
               <div class="reader-surface">
                 <div id="meaningPlaceholder" class="reader-placeholder">Type a word to look up ...</div>

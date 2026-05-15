@@ -17,6 +17,15 @@ const activeModelLabel = document.getElementById('activeModelLabel')
 const dictSelect = document.getElementById('dictSelect')
 const searchInput = document.getElementById('searchInput')
 const noDictionary = document.getElementById('noDictionary')
+const importWikitDictBtn = document.getElementById('importWikitDictBtn')
+const importMdxDictBtn = document.getElementById('importMdxDictBtn')
+const importDictStatus = document.getElementById('importDictStatus')
+const openConfigDirBtn = document.getElementById('openConfigDirBtn')
+const addDictMenuBtn = document.getElementById('addDictMenuBtn')
+const addDictMenu = document.getElementById('addDictMenu')
+const toolbarImportWikitBtn = document.getElementById('toolbarImportWikitBtn')
+const toolbarImportMdxBtn = document.getElementById('toolbarImportMdxBtn')
+const toolbarImportStatus = document.getElementById('toolbarImportStatus')
 const wordContent = document.getElementById('wordContent')
 const meaningPlaceholder = document.getElementById('meaningPlaceholder')
 const candidateList = document.getElementById('candidateList')
@@ -187,7 +196,11 @@ function setActiveMode(mode) {
   if (mode === 'translate') {
     translationInput.focus()
   } else if (mode === 'dictionary') {
-    searchInput.focus()
+    if (wordContent.classList.contains('is-hidden')) {
+      importWikitDictBtn?.focus()
+    } else {
+      searchInput.focus()
+    }
   }
 }
 
@@ -247,6 +260,103 @@ function renderMeaning(word, response) {
   meaningFrame.srcdoc = content
 }
 
+function isLookupPanelActive() {
+  return !wordContent.classList.contains('is-hidden')
+}
+
+function setImportControlsDisabled(disabled) {
+  for (const button of [
+    importWikitDictBtn,
+    importMdxDictBtn,
+    toolbarImportWikitBtn,
+    toolbarImportMdxBtn,
+    addDictMenuBtn
+  ]) {
+    if (button) {
+      button.disabled = disabled
+    }
+  }
+}
+
+function applyImportStatus(element, text, type, baseClass) {
+  element.textContent = text
+  element.className = baseClass
+  if (type) {
+    element.classList.add(`is-${type}`)
+  }
+  show(element)
+}
+
+function showImportDictStatus(text, type) {
+  if (isLookupPanelActive()) {
+    applyImportStatus(toolbarImportStatus, text, type, 'dict-toolbar-status')
+    hide(importDictStatus)
+    return
+  }
+  applyImportStatus(importDictStatus, text, type, 'dict-empty-status')
+  hide(toolbarImportStatus)
+}
+
+function hideImportDictStatus() {
+  importDictStatus.textContent = ''
+  importDictStatus.className = 'dict-empty-status is-hidden'
+  toolbarImportStatus.textContent = ''
+  toolbarImportStatus.className = 'dict-toolbar-status is-hidden'
+}
+
+function closeAddDictMenu() {
+  hide(addDictMenu)
+  addDictMenuBtn.setAttribute('aria-expanded', 'false')
+}
+
+function toggleAddDictMenu() {
+  const willOpen = addDictMenu.classList.contains('is-hidden')
+  if (willOpen) {
+    show(addDictMenu)
+    addDictMenuBtn.setAttribute('aria-expanded', 'true')
+  } else {
+    closeAddDictMenu()
+  }
+}
+
+async function importDictionary(expectedSuffix) {
+  closeAddDictMenu()
+
+  const filePath = await window.wikit.openFile()
+  if (!filePath) {
+    return
+  }
+
+  const suffix = (filePath.split('.').pop() || '').toLowerCase()
+  if (suffix !== expectedSuffix) {
+    showImportDictStatus(`请选择 .${expectedSuffix} 词典文件`, 'error')
+    return
+  }
+
+  setImportControlsDisabled(true)
+  showImportDictStatus(
+    expectedSuffix === 'mdx' ? '正在转换 MDX 词典，请稍候…' : '正在加载词典…',
+    ''
+  )
+
+  try {
+    const dict = await window.wikit.loadLocalDict(filePath)
+    await loadDictionaries()
+    if (dict && dict.id) {
+      dictSelect.value = dict.id
+    }
+    showImportDictStatus(
+      `已导入：${dict && dict.name ? dict.name : '词典'}`,
+      'success'
+    )
+    searchInput.focus()
+  } catch (error) {
+    showImportDictStatus('导入失败：' + getErrorMessage(error), 'error')
+  } finally {
+    setImportControlsDisabled(false)
+  }
+}
+
 async function loadDictionaries() {
   try {
     const dictionaries = await window.wikit.getDictList()
@@ -262,6 +372,7 @@ async function loadDictionaries() {
     if (dictionaries.length) {
       hide(noDictionary)
       show(wordContent)
+      hideImportDictStatus()
       showPlaceholder('Type a word to look up ...')
     } else {
       hide(wordContent)
@@ -724,6 +835,26 @@ document.addEventListener('keydown', (event) => {
 })
 searchInput.addEventListener('input', scheduleLookup)
 dictSelect.addEventListener('change', lookupCurrentWord)
+importWikitDictBtn.addEventListener('click', () => importDictionary('wikit'))
+importMdxDictBtn.addEventListener('click', () => importDictionary('mdx'))
+toolbarImportWikitBtn.addEventListener('click', () => importDictionary('wikit'))
+toolbarImportMdxBtn.addEventListener('click', () => importDictionary('mdx'))
+addDictMenuBtn.addEventListener('click', (event) => {
+  event.stopPropagation()
+  toggleAddDictMenu()
+})
+openConfigDirBtn.addEventListener('click', () => {
+  window.wikit.openConfigDir().catch(() => {})
+})
+document.addEventListener('click', (event) => {
+  if (!addDictMenu || addDictMenu.classList.contains('is-hidden')) {
+    return
+  }
+  if (event.target.closest('.dict-add-control')) {
+    return
+  }
+  closeAddDictMenu()
+})
 previewFrame.addEventListener('load', connectPreviewSocket)
 
 window.wikit.onTranslationSettingsUpdated((settingsJson) => {

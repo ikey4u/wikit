@@ -55,7 +55,7 @@ use crate::error::{AnyResult, Context};
 use crate::elog;
 
 use std::fs::{self, File};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::io::{Read, Write};
 
 use dirs;
@@ -114,6 +114,28 @@ impl Default for WikitConfig {
             srvcfg: ServerConfig::default(),
         }
     }
+}
+
+pub fn path_to_file_uri(path: &Path) -> String {
+    url::Url::from_file_path(path)
+        .map(|url| url.to_string())
+        .unwrap_or_else(|_| format!("file://{}", path.display()))
+}
+
+pub fn register_client_dictionary_uri(path: &Path) -> AnyResult<()> {
+    let uri = path_to_file_uri(path);
+    let mut cfg = load_config()?;
+    if cfg.cltcfg.uris.iter().any(|existing| existing == &uri) {
+        return Ok(());
+    }
+    cfg.cltcfg.uris.push(uri);
+    save_config(&cfg)
+}
+
+pub fn save_config(conf: &WikitConfig) -> AnyResult<()> {
+    let confpath = get_config_dir()?.join("wikit.toml");
+    let content = toml::to_string(conf).context(elog!("failed to serialize wikit.toml"))?;
+    fs::write(&confpath, content).context(elog!("failed to write wikit.toml"))
 }
 
 pub fn load_config() -> AnyResult<WikitConfig> {

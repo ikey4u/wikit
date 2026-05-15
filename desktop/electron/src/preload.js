@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('wikit', {
   startStaticFileServer: () => ipcRenderer.invoke('static:start'),
   openDirectory: () => ipcRenderer.invoke('dialog:open-directory'),
   openFile: () => ipcRenderer.invoke('dialog:open-file'),
+  openConfigDir: () => ipcRenderer.invoke('app:open-config-dir'),
   startPreviewServer: (dir) => ipcRenderer.invoke('preview:start', dir),
   stopPreviewServer: () => ipcRenderer.invoke('preview:stop'),
   isPreviewServerUp: () => ipcRenderer.invoke('preview:is-up'),
