@@ -382,31 +382,16 @@ ipcMain.handle('fs:copy-file', async (_event, src, dst) => {
 })
 ipcMain.handle('dict:build-wikit', async (event, srcfile, outfile) => {
   try {
-    const native = getNative()
-    let resolved = false
-    const result = await new Promise((resolve, reject) => {
-      const raw = native.buildDictionary(
-        String(srcfile),
-        String(outfile),
-        (_err, progress) => {
-          if (!resolved && event && !event.sender.isDestroyed()) {
-            event.sender.send('dict:build-progress', progress)
-          }
-        },
-        (_err, data) => {
-          if (!resolved) {
-            resolved = true
-            if (_err) reject(_err)
-            else resolve(JSON.parse(data))
-          }
+    const raw = await getNative().buildDictionary(
+      String(srcfile),
+      String(outfile),
+      (_err, progress) => {
+        if (event && !event.sender.isDestroyed()) {
+          event.sender.send('dict:build-progress', progress)
         }
-      )
-      if (!resolved) {
-        resolved = true
-        resolve(JSON.parse(raw))
       }
-    })
-    return result
+    )
+    return JSON.parse(raw)
   } catch (error) {
     console.error('build wikit failed:', error)
     return { ok: false, error: error.message || 'Unknown error' }

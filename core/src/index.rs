@@ -2,6 +2,7 @@
 
 use crate::error::{WikitResult};
 
+use std::collections::HashSet;
 use std::io::{SeekFrom};
 use std::fs::File;
 
@@ -68,13 +69,20 @@ impl FSTIndex {
         let mut stream = map.search(&query).into_stream();
 
         let mut r = vec![];
+        let mut seen = HashSet::new();
         if let Some(v) = map.get(keyword.as_ref()) {
-            r.push((keyword.as_ref().to_string(), v));
+            let key = keyword.as_ref().to_string();
+            seen.insert(key.clone());
+            r.push((key, v));
         }
 
         let (mut cnt, limit) = (0, 20);
         while let Some((k, v)) = stream.next() {
-            r.push((String::from_utf8(k.to_vec())?, v));
+            let key = String::from_utf8(k.to_vec())?;
+            if !seen.insert(key.clone()) {
+                continue;
+            }
+            r.push((key, v));
             cnt += 1;
             if cnt >= limit {
                 break;

@@ -157,6 +157,13 @@ impl<'a> MdxPacket<'a> {
 // parse_mdx will parse mdx file into list of (word, meaning) pair, all words are space trimed and
 // converted into lowercase.
 pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<MDXDict> {
+    parse_mdx_with_progress(mdxpath, option, |_| {})
+}
+
+pub fn parse_mdx_with_progress<F>(mdxpath: &str, option: Option<ParseOption>, mut progress: F) -> AnyResult<MDXDict>
+where
+    F: FnMut(f64),
+{
     let mut mdict = MDXDict::default();
 
     let mut buf = Vec::new();
@@ -478,13 +485,19 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<MDXDic
     );
     // ignore the remained buffer
     let (_, meanings) = meanings.context(elog!("failed to parse meaning "))?;
+    progress(0.45);
 
     let mut word_meaning_list: Vec<(String, String)> = vec![];
     log::info!("[+] Combine words and meanings ...");
     let wordcnt = words.len();
     let bar = ProgressBar::new(wordcnt as u64);
+    let progress_step = std::cmp::max(1, wordcnt / 1000);
     for i in 0..wordcnt {
         bar.inc(1);
+        if i % progress_step == 0 || i + 1 == wordcnt {
+            let ratio = if wordcnt == 0 { 1.0 } else { (i + 1) as f64 / wordcnt as f64 };
+            progress(0.45 + ratio * 0.40);
+        }
         let (start, word) = (words[i].1 as usize, words[i].0.clone());
         let end = if i == 0 {
             // the first element
@@ -509,6 +522,7 @@ pub fn parse_mdx(mdxpath: &str, option: Option<ParseOption>) -> AnyResult<MDXDic
         word_meaning_list.push((util::normalize_word(word), meaning));
     }
     bar.finish_with_message("Parsing MDX is done!");
+    progress(0.85);
     mdict.entries = word_meaning_list;
 
     Ok(mdict)

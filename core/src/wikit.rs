@@ -267,7 +267,17 @@ impl LocalDictionary {
         P: AsRef<Path>,
         Q: AsRef<Path>
     {
+        Self::create_with_progress(srcfile, outfile, |_| {})
+    }
+
+    pub fn create_with_progress<P, Q, F>(srcfile: P, outfile: Option<Q>, mut progress: F) -> WikitResult<PathBuf>
+    where
+        P: AsRef<Path>,
+        Q: AsRef<Path>,
+        F: FnMut(f64),
+    {
         let srcfile = srcfile.as_ref();
+        progress(0.02);
         let (pdir, stem, suffix) = util::parse_path(srcfile)
             .context(elog!("failed to get parent directory of {}", srcfile.display()))?;
 
@@ -357,11 +367,15 @@ impl LocalDictionary {
         let srcfile_path_str = &format!("{}", srcfile.display());
         let mut word_meaning_list = match suffix.to_lowercase().as_str() {
             "mdx" => {
-                mdict::parse_mdx(srcfile_path_str, None)?.entries
+                mdict::parse_mdx_with_progress(srcfile_path_str, None, |pct| {
+                    progress(0.05 + pct * 0.75);
+                })?.entries
             },
             "txt" => {
                 let f = File::open(srcfile_path_str).context(elog!("failed to open {}", srcfile_path_str))?;
-                reader::MDXSource::new(f).collect::<Vec<(String, String)>>()
+                let entries = reader::MDXSource::new(f).collect::<Vec<(String, String)>>();
+                progress(0.80);
+                entries
             }
             _ => {
                 return Err(WikitError::new(format!("source type {} is not supported", srcfile.display())));
@@ -371,13 +385,20 @@ impl LocalDictionary {
         word_meaning_list.sort_by(|a, b| a.0.cmp(&b.0));
         // remove duplicate word
         word_meaning_list.dedup_by(|a, b| a.0.eq(&b.0));
+        progress(0.82);
 
         let dstart = writer.seek(SeekFrom::Current(0))?;
         let mut index_table = vec![];
-        for (word, meaning) in word_meaning_list.iter() {
+        let total_entries = word_meaning_list.len();
+        let write_progress_step = std::cmp::max(1, total_entries / 1000);
+        for (idx, (word, meaning)) in word_meaning_list.iter().enumerate() {
             let entry = DataEntry::new(DataEntryType::TXT, meaning.len() as u32, meaning.as_bytes());
             let (offset, _count) = entry.write(&mut writer)?;
             index_table.push((word, offset));
+            if idx % write_progress_step == 0 || idx + 1 == total_entries {
+                let ratio = if total_entries == 0 { 1.0 } else { (idx + 1) as f64 / total_entries as f64 };
+                progress(0.82 + ratio * 0.12);
+            }
         }
         let dend = writer.seek(SeekFrom::Current(0))?;
 
@@ -389,12 +410,14 @@ impl LocalDictionary {
         writer.write(&dsz.to_be_bytes()[..])?;
 
         writer.seek(SeekFrom::Start(dend))?;
+        progress(0.95);
         let (ibase, isz) = index::FSTIndex::write(&mut index_table.iter(), &mut writer)?;
         let (ibase, isz) = (ibase as u64, isz as u64);
         writer.seek(SeekFrom::Start(ibase_pos))?;
         writer.write(&ibase.to_be_bytes()[..])?;
         writer.seek(SeekFrom::Start(isz_pos))?;
         writer.write(&isz.to_be_bytes()[..])?;
+        progress(0.99);
 
         Ok(outfile)
     }

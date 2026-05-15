@@ -12,7 +12,7 @@ use napi::{Error, Result as NapiResult};
 use napi_derive::napi;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -674,7 +674,11 @@ pub fn search_dict(dictid: String, word: String) -> NapiResult<Vec<SearchEntry>>
             WikitDictionary::Remote(rd) => rd.lookup(&word, &dictid),
         };
         if let Ok(entries) = entries {
+            let mut seen = HashSet::new();
             for (w, def) in entries {
+                if w.is_empty() || !seen.insert(w.clone()) {
+                    continue;
+                }
                 results.push(SearchEntry { word: w, definition: def });
             }
         }
@@ -685,42 +689,54 @@ pub fn search_dict(dictid: String, word: String) -> NapiResult<Vec<SearchEntry>>
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 
 #[napi]
-pub fn build_dictionary(
+pub async fn build_dictionary(
     srcfile: String,
     outfile: String,
     progress_callback: ThreadsafeFunction<f64>,
 ) -> NapiResult<String> {
-    let srcfile_path = PathBuf::from(&srcfile);
-    let outfile_path = PathBuf::from(&outfile);
+    tokio::task::spawn_blocking(move || -> NapiResult<String> {
+        let srcfile_path = PathBuf::from(&srcfile);
+        let outfile_path = PathBuf::from(&outfile);
 
-    if !srcfile_path.exists() {
-        return Err(Error::from_reason(format!("source file not found: {srcfile}")));
-    }
-
-    progress_callback.call(Ok(0.05f64), ThreadsafeFunctionCallMode::Blocking);
-
-    let suffix = srcfile_path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    if suffix == "txt" || suffix == "mdx" {
-    } else {
-        return Err(Error::from_reason(format!("unsupported source type: {}", suffix)));
-    }
-
-    let result = wikit::LocalDictionary::create(&srcfile_path, Some(&outfile_path));
-    progress_callback.call(Ok(0.5f64), ThreadsafeFunctionCallMode::Blocking);
-
-    match result {
-        Ok(path) => {
-            progress_callback.call(Ok(1.0f64), ThreadsafeFunctionCallMode::Blocking);
-            Ok(serde_json::json!({"ok": true, "output": path.display().to_string()}).to_string())
+        if !srcfile_path.exists() {
+            return Err(Error::from_reason(format!("source file not found: {srcfile}")));
         }
-        Err(e) => {
-            progress_callback.call(Ok(1.0f64), ThreadsafeFunctionCallMode::Blocking);
-            Ok(serde_json::json!({"ok": false, "error": e.to_string()}).to_string())
+
+        let suffix = srcfile_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        if suffix != "txt" && suffix != "mdx" {
+            return Err(Error::from_reason(format!("unsupported source type: {}", suffix)));
         }
-    }
+
+        let mut report_progress = |value: f64| {
+            progress_callback.call(
+                Ok(value.clamp(0.0, 1.0)),
+                ThreadsafeFunctionCallMode::Blocking,
+            );
+        };
+        report_progress(0.0);
+
+        let result = wikit::LocalDictionary::create_with_progress(
+            &srcfile_path,
+            Some(&outfile_path),
+            &mut report_progress,
+        );
+
+        match result {
+            Ok(path) => {
+                report_progress(1.0);
+                Ok(serde_json::json!({"ok": true, "output": path.display().to_string()}).to_string())
+            }
+            Err(e) => {
+                report_progress(1.0);
+                Ok(serde_json::json!({"ok": false, "error": e.to_string()}).to_string())
+            }
+        }
+    })
+    .await
+    .map_err(|e| napi_error("failed to join dictionary build task", e))?
 }

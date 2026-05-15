@@ -1020,7 +1020,9 @@ a:hover {
   flex-direction: column;
   gap: 0;
   padding: 0;
+  min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
   background: #ffffff;
 }
@@ -1037,11 +1039,12 @@ a:hover {
 }
 
 .dm-edit-pane {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 14px 16px;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -1253,7 +1256,9 @@ a:hover {
 }
 
 .code-editor {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   padding: 12px;
   border: 1px solid #e5e7eb;
@@ -1263,8 +1268,9 @@ a:hover {
   font-size: 12.5px;
   line-height: 1.6;
   color: #1f2328;
-  overflow-y: auto;
+  overflow: auto;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: break-word;
   outline: none;
   resize: none;
@@ -1696,7 +1702,9 @@ a:hover {
 .de-main {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
   background: #ffffff;
 }
@@ -1759,11 +1767,12 @@ a:hover {
 }
 
 .de-edit-pane {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 14px 16px;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -1782,7 +1791,8 @@ a:hover {
 }
 
 .de-code-editor {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 0;
   max-height: none;
   font-size: 12.5px;

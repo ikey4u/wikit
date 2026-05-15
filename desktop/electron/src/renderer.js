@@ -29,6 +29,7 @@ const mdxConverterTab = document.getElementById('mdxConverterTab')
 const moreToolsTab = document.getElementById('moreToolsTab')
 const dictMakerContent = document.getElementById('dictMakerContent')
 const mdxConverterContent = document.getElementById('mdxConverterContent')
+const dictMakerSearch = document.getElementById('dictMakerSearch')
 const entriesList = document.getElementById('entriesList')
 const contentEditor = document.getElementById('contentEditor')
 const cssEditor = document.getElementById('cssEditor')
@@ -52,7 +53,6 @@ const deEditMetaBtn = document.getElementById('deEditMetaBtn')
 const deSearchInput = document.getElementById('deSearchInput')
 const deEntryList = document.getElementById('deEntryList')
 const deViewer = document.getElementById('deViewer')
-const deEditorActions = document.querySelector('.de-editor-actions')
 const deTogglePreviewBtn = document.getElementById('deTogglePreviewBtn')
 const deForceFormatSelect = document.getElementById('deForceFormatSelect')
 const deEditMode = document.getElementById('deEditMode')
@@ -783,7 +783,8 @@ document.querySelectorAll('.editor-tab').forEach((tab) => {
     contentEditor.classList.toggle('is-hidden', !isContentEditor)
     cssEditor.classList.toggle('is-hidden', editor !== 'css')
     jsEditor.classList.toggle('is-hidden', editor !== 'js')
-    editorTypeSelector.classList.toggle('is-hidden', !isContentEditor)
+    editorTypeSelector.classList.remove('is-hidden')
+    contentType.classList.toggle('is-hidden', !isContentEditor)
     if (!isContentEditor) setDmPreviewMode(false)
   })
 })
@@ -945,14 +946,18 @@ async function loadEntries() {
 
 function renderEntriesList() {
   entriesList.replaceChildren()
-  if (Object.keys(entries).length === 0) {
+  const query = dictMakerSearch.value.trim().toLowerCase()
+  const visibleKeys = Object.keys(entries).filter(key => !query || key.toLowerCase().includes(query))
+  if (Object.keys(entries).length === 0 || visibleKeys.length === 0) {
     const empty = document.createElement('div')
     empty.className = 'entries-empty'
-    empty.textContent = currentDictDir ? '暂无词条，点击右上角添加' : '请先选择词典目录'
+    empty.textContent = Object.keys(entries).length === 0
+      ? (currentDictDir ? '暂无词条，点击右上角添加' : '请先选择词典目录')
+      : '未找到词条'
     entriesList.appendChild(empty)
     return
   }
-  for (const key of Object.keys(entries)) {
+  for (const key of visibleKeys) {
     const item = document.createElement('div')
     item.className = 'entry-item'
     item.textContent = key
@@ -1512,7 +1517,7 @@ document.querySelectorAll('.de-editor-tab').forEach(tab => {
     deHtmlEditor.classList.toggle('is-hidden', !isHtmlEditor)
     deCssEditor.classList.toggle('is-hidden', editor !== 'css')
     deJsEditor.classList.toggle('is-hidden', editor !== 'js')
-    deEditorActions.classList.toggle('is-hidden', !isHtmlEditor)
+    deForceFormatSelect.classList.toggle('is-hidden', !isHtmlEditor)
     setDePreviewMode(false)
   })
 })
