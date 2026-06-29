@@ -3,7 +3,8 @@ const { existsSync, rmSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 
 const projectDir = resolve(__dirname, '..')
-const distDir = join(projectDir, 'dist')
+const repoRoot = resolve(projectDir, '../..')
+const distDir = join(repoRoot, 'dist')
 
 // Ad-hoc sign only: no Developer ID. Users must allow the app in System Settings.
 const buildEnv = {

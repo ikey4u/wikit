@@ -21,6 +21,9 @@
     "electron-reloader": "^1.2.3"
   },
   "build": {
+    "directories": {
+      "output": "../../dist"
+    },
     "appId": "com.zhqli.wikit",
     "productName": "Wikit Desktop",
     "files": [

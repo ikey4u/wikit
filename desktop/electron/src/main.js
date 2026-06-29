@@ -1,12 +1,27 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog, clipboard, globalShortcut } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
+const { initLogger, createLogger } = require('./logger')
 
-try {
-  require('electron-reloader')(module, {
-    ignore: ['node_modules', 'native', 'icons', 'scripts']
-  })
-} catch (_) {}
+const bootstrapLog = createLogger('bootstrap')
+const appLog = createLogger('app')
+const windowLog = createLogger('window')
+const nativeBridgeLog = createLogger('native-bridge')
+const staticServerLog = createLogger('static-server')
+const previewServerLog = createLogger('preview-server')
+const processLog = createLogger('process')
+const devLog = createLogger('dev-hot-reload')
+
+if (!app.isPackaged) {
+  try {
+    require('electron-reloader')(module, {
+      ignore: ['node_modules', 'native', 'icons', 'scripts']
+    })
+    devLog.info('electron-reloader enabled')
+  } catch (error) {
+    devLog.warn('electron-reloader unavailable', { error: String(error) })
+  }
+}
 
 const version = '0.5.0'
 let native
@@ -26,7 +41,14 @@ function getNative() {
     const nativePath = app.isPackaged
       ? path.join(process.resourcesPath, 'native')
       : path.join(__dirname, '../../native')
-    native = require(nativePath)
+    nativeBridgeLog.info('loading native module', { nativePath, isPackaged: app.isPackaged })
+    try {
+      native = require(nativePath)
+      nativeBridgeLog.info('native module loaded')
+    } catch (error) {
+      nativeBridgeLog.error('native module load failed', { nativePath, error: String(error) })
+      throw error
+    }
   }
   return native
 }
@@ -121,6 +143,7 @@ function applyAppShortcuts() {
 }
 
 function createWindow() {
+  windowLog.info('creating main window')
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 740,
@@ -139,7 +162,31 @@ function createWindow() {
     }
   })
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'))
+  const indexPath = path.join(__dirname, 'index.html')
+  const preloadPath = path.join(__dirname, 'preload.js')
+  windowLog.info('loading page', { indexPath, preloadPath })
+  mainWindow.loadFile(indexPath)
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    windowLog.info('finished loading', { url: mainWindow.webContents.getURL() })
+  })
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    windowLog.error('failed to load', {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      isMainFrame
+    })
+  })
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    windowLog.error('render process gone', details)
+  })
+  mainWindow.on('unresponsive', () => {
+    windowLog.warn('became unresponsive')
+  })
+  mainWindow.on('responsive', () => {
+    windowLog.info('became responsive again')
+  })
 
   mainWindow.on('close', (event) => {
     if (quitting) {
@@ -170,6 +217,7 @@ function createWindow() {
   })
 
   mainWindow.on('closed', () => {
+    windowLog.info('closed')
     mainWindow = null
   })
 }
@@ -261,6 +309,22 @@ function createMenu() {
         click: () => shell.openExternal('https://github.com/ikey4u/wikit/wiki')
       },
       {
+        label: 'Open Log File',
+        click: () => {
+          const logFilePath = path.join(app.getPath('userData'), 'logs', 'main.log')
+          if (fs.existsSync(logFilePath)) {
+            shell.openPath(logFilePath)
+            return
+          }
+          dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Wikit Desktop',
+            message: '日志文件尚未生成',
+            detail: logFilePath
+          })
+        }
+      },
+      {
         label: 'About',
         click: () => {
           dialog.showMessageBox(mainWindow, {
@@ -327,9 +391,20 @@ ipcMain.handle('app-settings:save', (_event, settingsJson) => {
   })
 })
 ipcMain.handle('native:ffi-hello', (_event, name) => getNative().ffiHello(name))
-ipcMain.handle('static:start', () => getNative().startStaticFileServer())
-ipcMain.handle('preview:start', (_event, dir) => getNative().startPreviewServer(dir))
-ipcMain.handle('preview:stop', () => getNative().stopPreviewServer())
+ipcMain.handle('static:start', () => {
+  const port = getNative().startStaticFileServer()
+  staticServerLog.info('start requested via ipc', { port })
+  return port
+})
+ipcMain.handle('preview:start', (_event, dir) => {
+  const port = getNative().startPreviewServer(dir)
+  previewServerLog.info('start requested via ipc', { port, dir: String(dir || '') })
+  return port
+})
+ipcMain.handle('preview:stop', () => {
+  previewServerLog.info('stop requested via ipc')
+  return getNative().stopPreviewServer()
+})
 ipcMain.handle('preview:is-up', () => getNative().isPreviewServerUp())
 ipcMain.handle('settings:open', () => createSettingsWindow())
 ipcMain.handle('dialog:open-directory', async () => {
@@ -407,13 +482,74 @@ ipcMain.handle('dict:build-wikit', async (event, srcfile, outfile) => {
   }
 })
 
-app.whenReady().then(() => {
-  getNative().startStaticFileServer()
+ipcMain.on('app:log', (_event, payload) => {
+  const level = payload && payload.level ? String(payload.level).toUpperCase() : 'INFO'
+  const scope = payload && payload.scope ? String(payload.scope) : 'renderer.unknown'
+  const message = payload && payload.message ? String(payload.message) : ''
+  const meta = payload && payload.meta !== undefined ? payload.meta : undefined
+  const scopedLog = createLogger(scope)
+  if (level === 'ERROR') {
+    scopedLog.error(message, meta)
+    return
+  }
+  if (level === 'WARN') {
+    scopedLog.warn(message, meta)
+    return
+  }
+  scopedLog.info(message, meta)
+})
+
+function bootstrap() {
+  const logFilePath = initLogger(app.getPath('userData'))
+  bootstrapLog.info('started', {
+    version,
+    isPackaged: app.isPackaged,
+    pid: process.pid,
+    userData: app.getPath('userData'),
+    logFilePath
+  })
+
+  try {
+    getNative().initNativeLogger(logFilePath)
+    nativeBridgeLog.info('logger initialized', { logFilePath })
+  } catch (error) {
+    nativeBridgeLog.error('logger initialization failed', { error: String(error) })
+  }
+
+  let staticPort
+  try {
+    staticPort = getNative().startStaticFileServer()
+    staticServerLog.info('started', { port: staticPort })
+  } catch (error) {
+    staticServerLog.error('failed to start', { error: String(error) })
+    dialog.showErrorBox(
+      'Wikit Desktop',
+      `静态资源服务启动失败，应用可能显示白屏。\n\n${String(error)}\n\n日志：${logFilePath}`
+    )
+    throw error
+  }
+
   createMenu()
   createWindow()
   applyAppShortcuts()
+  bootstrapLog.info('completed', { staticPort })
+}
+
+process.on('uncaughtException', (error) => {
+  processLog.error('uncaught exception', { error: String(error) })
+})
+
+process.on('unhandledRejection', (reason) => {
+  processLog.error('unhandled rejection', { reason: String(reason) })
+})
+
+app.whenReady().then(() => {
+  bootstrap().catch((error) => {
+    bootstrapLog.error('failed', { error: String(error) })
+  })
 
   app.on('activate', () => {
+    appLog.info('activated', { windowCount: BrowserWindow.getAllWindows().length })
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
@@ -422,6 +558,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   quitting = true
+  appLog.info('quitting')
   globalShortcut.unregisterAll()
   try {
     getNative().stopPreviewServer()

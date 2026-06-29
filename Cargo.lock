@@ -5014,6 +5014,7 @@ dependencies = [
  "anyhow",
  "async-openai",
  "axum",
+ "chrono",
  "napi",
  "napi-build",
  "napi-derive",

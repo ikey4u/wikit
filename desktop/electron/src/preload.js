@@ -1,6 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+function sendLog(level, scope, message, meta) {
+  ipcRenderer.send('app:log', { level, scope, message, meta })
+}
+
 contextBridge.exposeInMainWorld('wikit', {
+  log: (scope, level, message, meta) => sendLog(level, scope, message, meta),
   getDictList: () => ipcRenderer.invoke('dict:list'),
   loadLocalDict: (path) => ipcRenderer.invoke('dict:load-local', path),
   lookup: (dictid, word) => ipcRenderer.invoke('dict:lookup', dictid, word),

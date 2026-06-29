@@ -77,6 +77,29 @@ const mdxConverterStatus = document.getElementById('mdxConverterStatus')
 const mdxConverterProgress = document.getElementById('mdxConverterProgress')
 const openMdxOutputBtn = document.getElementById('openMdxOutputBtn')
 
+function reportRendererLog(scope, level, message, meta) {
+  if (window.wikit && typeof window.wikit.log === 'function') {
+    window.wikit.log(scope, level, message, meta)
+  }
+}
+
+window.addEventListener('error', (event) => {
+  reportRendererLog('renderer.runtime', 'error', 'window error', {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno
+  })
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+  reportRendererLog('renderer.runtime', 'error', 'unhandled rejection', {
+    reason: String(event.reason)
+  })
+})
+
+reportRendererLog('renderer.bootstrap', 'info', 'script started')
+
 let lookupTimer = null
 let latestLookup = null
 let currentResponse = null
@@ -883,9 +906,18 @@ previewFrame.addEventListener('load', connectPreviewSocket)
 window.wikit.onTranslationSettingsUpdated((settingsJson) => {
   updateActiveModelLabel(parseJson(settingsJson, null))
 })
+reportRendererLog('renderer.bridge', 'info', 'bridge ready', {
+  hasWikit: typeof window.wikit !== 'undefined'
+})
 window.wikit.startPreviewer = startPreviewer
 window.wikit.stopPreviewer = stopPreviewer
-window.wikit.startStaticFileServer().catch(() => {})
+window.wikit.startStaticFileServer()
+  .then((port) => {
+    reportRendererLog('renderer.static-server', 'info', 'ready', { port })
+  })
+  .catch((error) => {
+    reportRendererLog('renderer.static-server', 'error', 'failed', { error: String(error) })
+  })
 
 dictMakerTab.addEventListener('click', () => setActiveTool('dict-maker'))
 dictEditorTab.addEventListener('click', () => setActiveTool('dict-editor'))
@@ -1486,6 +1518,7 @@ loadDictionaries()
 loadTranslationSettings()
 setActiveMode('translate')
 setActiveTool('dict-maker')
+reportRendererLog('renderer.bootstrap', 'info', 'initialization completed', { activeMode })
 
 function addDeDictOption(dict) {
   let opt = Array.from(deDictSelect.options).find(option => option.value === dict.id)

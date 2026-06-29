@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use chrono::Utc;
 use wikit_core::{config, crypto, preview, util, wikit};
 use wikit_core::wikit::WikitDictionary;
 
@@ -31,6 +32,46 @@ static STATIC_SERVER_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 static PREVIEW_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 static PREVIEW_SERVER_PORT: AtomicU16 = AtomicU16::new(0);
 static PREVIEW_SHUTDOWN: Lazy<Mutex<Option<tokio::sync::broadcast::Sender<()>>>> = Lazy::new(|| Mutex::new(None));
+static NATIVE_LOG_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
+
+fn native_log(level: &str, module: &str, message: impl AsRef<str>) {
+    let message = message.as_ref();
+    let timestamp = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let line = format!("[{timestamp}] [{level}] [{module}] {message}\n");
+    eprint!("{line}");
+    let Ok(guard) = NATIVE_LOG_PATH.lock() else {
+        return;
+    };
+    let Some(path) = guard.as_ref() else {
+        return;
+    };
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
+#[napi]
+pub fn init_native_logger(log_file_path: String) -> NapiResult<()> {
+    let path = PathBuf::from(log_file_path.trim());
+    if path.as_os_str().is_empty() {
+        return Err(Error::from_reason("native log file path is empty"));
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| napi_error("failed to create native log directory", e))?;
+    }
+    {
+        let mut guard = NATIVE_LOG_PATH
+            .lock()
+            .map_err(|e| Error::from_reason(format!("failed to lock native logger state: {e}")))?;
+        *guard = Some(path.clone());
+    }
+    native_log("INFO", "logger", format!("initialized at {}", path.display()));
+    Ok(())
+}
 
 #[napi(object)]
 pub struct DictMeta {
@@ -297,8 +338,19 @@ async fn translate_with_settings(settings: TranslationSettings, request: Transla
 }
 
 fn choose_static_port() -> NapiResult<u16> {
-    util::get_free_web_tcp_port(Some(INTERNAL_FS_PORT.load(Ordering::SeqCst)))
-        .ok_or_else(|| Error::from_reason("failed to get static file server port"))
+    let preferred = INTERNAL_FS_PORT.load(Ordering::SeqCst);
+    let port = util::get_free_web_tcp_port(Some(preferred))
+        .ok_or_else(|| Error::from_reason("failed to get static file server port"))?;
+    if port != preferred {
+        native_log(
+            "INFO",
+            "static-server",
+            format!("preferred port {preferred} unavailable, using {port}"),
+        );
+    } else {
+        native_log("INFO", "static-server", format!("using preferred port {port}"));
+    }
+    Ok(port)
 }
 
 fn run_static_file_server(port: u16) -> AnyResult<()> {
@@ -333,15 +385,22 @@ fn ensure_static_file_server() -> NapiResult<u16> {
         .map_err(|e| Error::from_reason(format!("failed to lock static file server state: {e}")))?;
 
     if STATIC_SERVER_STARTED.load(Ordering::SeqCst) {
-        return Ok(INTERNAL_FS_PORT.load(Ordering::SeqCst));
+        let port = INTERNAL_FS_PORT.load(Ordering::SeqCst);
+        native_log("INFO", "static-server", format!("already running on port {port}"));
+        return Ok(port);
     }
 
     let port = choose_static_port()?;
     INTERNAL_FS_PORT.store(port, Ordering::SeqCst);
     STATIC_SERVER_STARTED.store(true, Ordering::SeqCst);
+    native_log("INFO", "static-server", format!("starting background thread on port {port}"));
     std::thread::spawn(move || {
         if let Err(error) = run_static_file_server(port) {
-            eprintln!("failed to run internal static file server: {error:?}");
+            native_log(
+                "ERROR",
+                "static-server",
+                format!("failed on port {port}: {error:?}"),
+            );
             STATIC_SERVER_STARTED.store(false, Ordering::SeqCst);
         }
     });
@@ -568,19 +627,31 @@ pub fn start_preview_server(dir: String) -> NapiResult<u16> {
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        return Ok(PREVIEW_SERVER_PORT.load(Ordering::SeqCst));
+        let port = PREVIEW_SERVER_PORT.load(Ordering::SeqCst);
+        native_log("INFO", "preview-server", format!("already running on port {port}"));
+        return Ok(port);
     }
 
+    native_log(
+        "INFO",
+        "preview-server",
+        format!(
+            "creating previewer for dir '{}'",
+            if dir.is_empty() { "<empty>" } else { dir.as_str() }
+        ),
+    );
     let previewer = match preview::Previewer::new(dir) {
         Ok(previewer) => previewer,
         Err(error) => {
             PREVIEW_SERVER_STARTED.store(false, Ordering::SeqCst);
             PREVIEW_SERVER_PORT.store(0, Ordering::SeqCst);
+            native_log("ERROR", "preview-server", format!("failed to create previewer: {error:?}"));
             return Err(napi_error("failed to create preview server", error));
         }
     };
     let port = previewer.port();
     PREVIEW_SERVER_PORT.store(port, Ordering::SeqCst);
+    native_log("INFO", "preview-server", format!("listening on port {port}"));
 
     let (tx, rx) = tokio::sync::broadcast::channel(1);
     {
@@ -600,7 +671,7 @@ pub fn start_preview_server(dir: String) -> NapiResult<u16> {
         }();
 
         if let Err(error) = result {
-            eprintln!("preview server exit with error: {error:?}");
+            native_log("ERROR", "preview-server", format!("exited with error: {error:?}"));
         }
         PREVIEW_SERVER_STARTED.store(false, Ordering::SeqCst);
         PREVIEW_SERVER_PORT.store(0, Ordering::SeqCst);
@@ -614,6 +685,7 @@ pub fn start_preview_server(dir: String) -> NapiResult<u16> {
 
 #[napi]
 pub fn stop_preview_server() -> NapiResult<()> {
+    native_log("INFO", "preview-server", "stopping");
     if let Some(sender) = lock_preview_shutdown()?.as_ref() {
         let _ = sender.send(());
     }
