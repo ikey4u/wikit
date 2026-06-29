@@ -29,6 +29,7 @@ static INTERNAL_FS_PORT: AtomicU16 = AtomicU16::new(7561);
 static STATIC_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 static STATIC_SERVER_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 static PREVIEW_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
+static PREVIEW_SERVER_PORT: AtomicU16 = AtomicU16::new(0);
 static PREVIEW_SHUTDOWN: Lazy<Mutex<Option<tokio::sync::broadcast::Sender<()>>>> = Lazy::new(|| Mutex::new(None));
 
 #[napi(object)]
@@ -296,14 +297,8 @@ async fn translate_with_settings(settings: TranslationSettings, request: Transla
 }
 
 fn choose_static_port() -> NapiResult<u16> {
-    let restricted_ports = [6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697u16];
-    loop {
-        let port = util::get_free_tcp_port(Some(INTERNAL_FS_PORT.load(Ordering::SeqCst)))
-            .ok_or_else(|| Error::from_reason("failed to get static file server port"))?;
-        if !restricted_ports.contains(&port) {
-            return Ok(port);
-        }
-    }
+    util::get_free_web_tcp_port(Some(INTERNAL_FS_PORT.load(Ordering::SeqCst)))
+        .ok_or_else(|| Error::from_reason("failed to get static file server port"))
 }
 
 fn run_static_file_server(port: u16) -> AnyResult<()> {
@@ -568,13 +563,24 @@ pub fn ffi_hello(name: String) -> NapiResult<String> {
 }
 
 #[napi]
-pub fn start_preview_server(dir: String) -> NapiResult<()> {
+pub fn start_preview_server(dir: String) -> NapiResult<u16> {
     if PREVIEW_SERVER_STARTED
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        return Ok(());
+        return Ok(PREVIEW_SERVER_PORT.load(Ordering::SeqCst));
     }
+
+    let previewer = match preview::Previewer::new(dir) {
+        Ok(previewer) => previewer,
+        Err(error) => {
+            PREVIEW_SERVER_STARTED.store(false, Ordering::SeqCst);
+            PREVIEW_SERVER_PORT.store(0, Ordering::SeqCst);
+            return Err(napi_error("failed to create preview server", error));
+        }
+    };
+    let port = previewer.port();
+    PREVIEW_SERVER_PORT.store(port, Ordering::SeqCst);
 
     let (tx, rx) = tokio::sync::broadcast::channel(1);
     {
@@ -589,7 +595,6 @@ pub fn start_preview_server(dir: String) -> NapiResult<()> {
                 .enable_all()
                 .build()?;
             rt.block_on(async move {
-                let previewer = preview::Previewer::new(dir).context("failed to create preview server")?;
                 Arc::new(previewer).run(rx).await.context("preview server exited with error")
             })
         }();
@@ -598,12 +603,13 @@ pub fn start_preview_server(dir: String) -> NapiResult<()> {
             eprintln!("preview server exit with error: {error:?}");
         }
         PREVIEW_SERVER_STARTED.store(false, Ordering::SeqCst);
+        PREVIEW_SERVER_PORT.store(0, Ordering::SeqCst);
         if let Ok(mut shutdown) = PREVIEW_SHUTDOWN.lock() {
             *shutdown = None;
         }
     });
 
-    Ok(())
+    Ok(port)
 }
 
 #[napi]
@@ -612,6 +618,7 @@ pub fn stop_preview_server() -> NapiResult<()> {
         let _ = sender.send(());
     }
     PREVIEW_SERVER_STARTED.store(false, Ordering::SeqCst);
+    PREVIEW_SERVER_PORT.store(0, Ordering::SeqCst);
     Ok(())
 }
 

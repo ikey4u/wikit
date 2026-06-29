@@ -1,5 +1,6 @@
 use crate::error::{Result, WikitError};
 use crate::reader::WikitSource;
+use crate::util;
 
 use std::cell::{Cell, RefCell};
 use std::{path::{Path, PathBuf}, fs};
@@ -43,6 +44,7 @@ pub struct PreviewerState {
 pub struct Previewer {
     watchdir: PathBuf,
     svrdir: PathBuf,
+    port: u16,
     state: Arc<Mutex<PreviewerState>>,
 }
 
@@ -50,6 +52,8 @@ impl Previewer {
     pub fn new<P: AsRef<Path>>(watchdir: P) -> Result<Self> {
         let svrdir = tempfile::tempdir()?.into_path();
         let dbpath = svrdir.join("preview.db");
+        let port = util::get_free_web_tcp_port(Some(8088))
+            .ok_or_else(|| WikitError::new("failed to get preview server port"))?;
         let db = rusqlite::Connection::open(&dbpath)?;
         db.execute(
             "CREATE TABLE IF NOT EXISTS preview (
@@ -63,11 +67,16 @@ impl Previewer {
         Ok(Self {
             watchdir: watchdir.as_ref().into(),
             svrdir,
+            port,
             state: Arc::new(Mutex::new(PreviewerState {
                 db: db,
                 wss: None,
             }))
         })
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     pub async fn run(self: Arc<Self>, shutdown_rx: Receiver<()>) -> Result<()> {
@@ -257,7 +266,7 @@ impl Previewer {
                     .layer(cors)
                     .layer(Extension(self.state.clone()))
             );
-        let addr = SocketAddr::from(([127, 0, 0, 1], 8088));
+        let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
         let server = axum::Server::bind(&addr)
             .tcp_nodelay(true)
             .serve(app.into_make_service())

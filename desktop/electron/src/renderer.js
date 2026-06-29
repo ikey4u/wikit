@@ -93,6 +93,7 @@ let entries = {}
 let currentEntry = null
 let isModified = false
 let previewTimer = null
+let previewPort = null
 
 let _dmResolve = null
 let _dmDone = false
@@ -744,12 +745,23 @@ function clearTranslation() {
   translationInput.focus()
 }
 
+function getPreviewBaseUrl() {
+  if (!previewPort) {
+    return null
+  }
+  return `http://127.0.0.1:${previewPort}`
+}
+
 function connectPreviewSocket() {
   if (previewSocket) {
     previewSocket.close()
   }
 
-  previewSocket = new WebSocket('ws://127.0.0.1:8088/wss')
+  if (!previewPort) {
+    return
+  }
+
+  previewSocket = new WebSocket(`ws://127.0.0.1:${previewPort}/wss`)
   previewSocket.addEventListener('open', () => {
     previewSocket.send('WIKIT_PREVIEWER_CONNECT')
   })
@@ -761,9 +773,14 @@ function connectPreviewSocket() {
 }
 
 async function waitForPreviewServer() {
+  const previewBaseUrl = getPreviewBaseUrl()
+  if (!previewBaseUrl) {
+    return false
+  }
+
   for (let i = 0; i < 30; i += 1) {
     try {
-      const response = await fetch('http://127.0.0.1:8088')
+      const response = await fetch(previewBaseUrl)
       if (response.status === 200) {
         return true
       }
@@ -781,7 +798,12 @@ async function startPreviewer() {
     if (!sourceDir) {
       return
     }
-    await window.wikit.startPreviewServer(sourceDir)
+    previewPort = await window.wikit.startPreviewServer(sourceDir)
+  } else if (!previewPort) {
+    previewPort = await window.wikit.startPreviewServer('')
+  }
+
+  if (previewPort) {
     started = await waitForPreviewServer()
   }
 
@@ -793,7 +815,7 @@ async function startPreviewer() {
     hide(noCandidate)
     hide(meaningFrame)
     show(previewFrame)
-    previewFrame.src = 'http://127.0.0.1:8088'
+    previewFrame.src = getPreviewBaseUrl()
   }
 }
 
@@ -804,6 +826,7 @@ async function stopPreviewer() {
     previewSocket = null
   }
   previewFrame.removeAttribute('src')
+  previewPort = null
   hide(previewFrame)
   showPlaceholder('Type a word to look up ...')
 }

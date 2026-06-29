@@ -162,6 +162,29 @@ pub fn get_free_tcp_port(default_port: Option<u16>) -> Option<u16> {
     (6000..9000).find(|port| TcpListener::bind(("127.0.0.1", *port)).is_ok())
 }
 
+pub fn is_chromium_restricted_port(port: u16) -> bool {
+    matches!(port, 6000 | 6566 | 6665..=6669 | 6697)
+}
+
+pub fn get_free_web_tcp_port(default_port: Option<u16>) -> Option<u16> {
+    if let Some(port) = default_port {
+        if !is_chromium_restricted_port(port) && TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return Some(port)
+        }
+    }
+    (6000..9000)
+        .filter(|port| !is_chromium_restricted_port(*port))
+        .find(|port| TcpListener::bind(("127.0.0.1", *port)).is_ok())
+}
+
+#[test]
+fn test_chromium_restricted_ports() {
+    assert!(is_chromium_restricted_port(6000));
+    assert!(is_chromium_restricted_port(6667));
+    assert!(!is_chromium_restricted_port(6001));
+    assert!(!is_chromium_restricted_port(8088));
+}
+
 #[test]
 fn test_argparser() {
     let cmd = "a bc def";

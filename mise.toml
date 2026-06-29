@@ -1,0 +1,15 @@
+[tools]
+node = "22.22.1"
+rust = "1.96.0"
+
+[tasks.build]
+description = "Build the desktop distribution"
+dir = "desktop/electron"
+run = "npm run build:dmg"
+
+[tasks.dev]
+description = "Run the desktop app in development mode"
+dir = "desktop/electron"
+env.ELECTRON_ENABLE_LOGGING = "1"
+env.ELECTRON_ENABLE_STACK_DUMPING = "1"
+run = "npm run dev"
