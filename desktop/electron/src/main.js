@@ -1,6 +1,17 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog, clipboard, globalShortcut } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
+
+const APP_NAME = 'Bootsmind Wikit'
+const USER_DATA_DIR_NAME = 'bootsmind-wikit'
+
+function configureUserDataPath() {
+  app.setName(APP_NAME)
+  app.setPath('userData', path.join(app.getPath('appData'), USER_DATA_DIR_NAME))
+}
+
+configureUserDataPath()
+
 const { initLogger, createLogger } = require('./logger')
 
 const bootstrapLog = createLogger('bootstrap')
@@ -29,6 +40,12 @@ let mainWindow
 let settingsWindow
 let quitting = false
 let registeredToggleAccelerator = null
+let rendererReloadAttempts = 0
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
 
 const defaultAppSettings = {
   shortcuts: {
@@ -150,7 +167,7 @@ function createWindow() {
     minWidth: 600,
     minHeight: 500,
     fullscreen: false,
-    title: 'Wikit Desktop',
+    title: APP_NAME,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 2, y: 2 },
     backgroundColor: '#ffffff',
@@ -167,6 +184,24 @@ function createWindow() {
   windowLog.info('loading page', { indexPath, preloadPath })
   mainWindow.loadFile(indexPath)
 
+  mainWindow.webContents.on('console-message', (event) => {
+    const level = Number(event.level)
+    const message = event.message || ''
+    const source = event.sourceId || ''
+    const line = event.lineNumber || 0
+    const scope = 'renderer.console'
+    const meta = { source, line }
+    if (level >= 3) {
+      windowLog.error(message, meta)
+      return
+    }
+    if (level === 2) {
+      windowLog.warn(message, meta)
+      return
+    }
+    windowLog.info(message, meta)
+  })
+
   mainWindow.webContents.on('did-finish-load', () => {
     windowLog.info('finished loading', { url: mainWindow.webContents.getURL() })
   })
@@ -180,6 +215,23 @@ function createWindow() {
   })
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     windowLog.error('render process gone', details)
+    if (quitting || !mainWindow || mainWindow.isDestroyed()) {
+      return
+    }
+    if (rendererReloadAttempts >= 1) {
+      dialog.showErrorBox(
+        APP_NAME,
+        `界面进程异常退出（${details.reason || 'unknown'}），请完全退出后重新打开。\n\n日志：${path.join(app.getPath('userData'), 'logs', 'main.log')}`
+      )
+      return
+    }
+    rendererReloadAttempts += 1
+    windowLog.warn('reloading window after renderer crash', {
+      attempt: rendererReloadAttempts,
+      reason: details.reason,
+      exitCode: details.exitCode
+    })
+    mainWindow.loadFile(indexPath)
   })
   mainWindow.on('unresponsive', () => {
     windowLog.warn('became unresponsive')
@@ -198,8 +250,8 @@ function createWindow() {
       buttons: ['Cancel', 'Quit'],
       defaultId: 0,
       cancelId: 0,
-      title: 'Wikit Desktop',
-      message: 'Are you sure that you want to exit wikit desktop?'
+      title: APP_NAME,
+      message: `Are you sure you want to quit ${APP_NAME}?`
     })
 
     if (answer !== 1) {
@@ -265,7 +317,7 @@ function createMenu() {
               const configDir = getNative().getConfigDir()
               await shell.openPath(configDir)
             } catch (error) {
-              dialog.showErrorBox('Wikit Desktop', String(error))
+              dialog.showErrorBox(APP_NAME, String(error))
             }
           }
         },
@@ -318,7 +370,7 @@ function createMenu() {
           }
           dialog.showMessageBox(mainWindow, {
             type: 'info',
-            title: 'Wikit Desktop',
+            title: APP_NAME,
             message: '日志文件尚未生成',
             detail: logFilePath
           })
@@ -329,9 +381,9 @@ function createMenu() {
         click: () => {
           dialog.showMessageBox(mainWindow, {
             type: 'info',
-            title: 'Wikit Desktop',
-            message: 'Wikit Desktop',
-            detail: `A universal dictionary\nv${version}\nhttps://github.com/ikey4u/wikit`
+            title: APP_NAME,
+            message: APP_NAME,
+            detail: `${APP_NAME}\nA universal dictionary\nv${version}\nhttps://github.com/ikey4u/wikit`
           })
         }
       }
@@ -523,7 +575,7 @@ function bootstrap() {
   } catch (error) {
     staticServerLog.error('failed to start', { error: String(error) })
     dialog.showErrorBox(
-      'Wikit Desktop',
+      APP_NAME,
       `静态资源服务启动失败，应用可能显示白屏。\n\n${String(error)}\n\n日志：${logFilePath}`
     )
     throw error
@@ -544,8 +596,30 @@ process.on('unhandledRejection', (reason) => {
 })
 
 app.whenReady().then(() => {
-  bootstrap().catch((error) => {
+  if (!gotSingleInstanceLock) {
+    return
+  }
+
+  try {
+    bootstrap()
+  } catch (error) {
     bootstrapLog.error('failed', { error: String(error) })
+  }
+
+  app.on('second-instance', () => {
+    appLog.info('second instance requested, focusing existing window')
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow()
+      return
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore()
+    }
+    mainWindow.show()
+    if (process.platform === 'darwin') {
+      app.dock.show()
+    }
+    mainWindow.focus()
   })
 
   app.on('activate', () => {

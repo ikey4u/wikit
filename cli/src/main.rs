@@ -85,7 +85,7 @@ async fn main() -> AnyResult<()> {
         .setting(AppSettings::ColoredHelp)
         .version(VERSION)
         .author("ikey4u <pwnkeeper@gmail.com>")
-        .about("A universal dictionary - Wikit")
+        .about("Bootsmind Wikit - A universal dictionary")
         .subcommand(
             SubCommand::with_name("dict")
             .setting(AppSettings::ArgRequiredElseHelp)
@@ -272,7 +272,7 @@ async fn main() -> AnyResult<()> {
 
     if let Some(server) = matches.subcommand_matches("server") {
         if server.is_present("start") {
-            // The database config is read from $HOME/.config/wikit/wikit.toml
+            // The database config is read from $HOME/.config/bootsmind-wikit/wikit.toml
             router::rocket().launch().await?;
         }
     }

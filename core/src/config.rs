@@ -62,6 +62,8 @@ use dirs;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
+const APP_DATA_DIR_NAME: &str = "bootsmind-wikit";
+
 // The max total size of MDX items (word or meaning) contained in one MDX block
 pub const MAX_MDX_ITEM_SIZE: usize = (2 << 20) as usize;
 
@@ -156,7 +158,7 @@ pub fn load_config() -> AnyResult<WikitConfig> {
 
 pub fn get_config_dir() -> AnyResult<PathBuf> {
     let sysconfdir = dirs::config_dir().context(elog!("cannot get system config directory"))?;
-    let confdir = sysconfdir.join("wikit");
+    let confdir = sysconfdir.join(APP_DATA_DIR_NAME);
     if !confdir.exists() {
         fs::create_dir_all(&confdir).context(elog!("failed to create {}", confdir.display()))?;
     }

@@ -1,9 +1,9 @@
 {
-  "name": "wikit-electron",
+  "name": "bootsmind-wikit",
   "version": "0.6.0",
   "private": true,
   "author": "ikey4u <pwnkeeper@gmail.com>",
-  "description": "Electron shell for Wikit using Rust native module through NAPI",
+  "description": "Bootsmind Wikit desktop shell using Rust native module through NAPI",
   "main": "src/main.js",
   "scripts": {
     "build:native": "cd ../native && npm install && npm run build",
@@ -24,8 +24,8 @@
     "directories": {
       "output": "../../dist"
     },
-    "appId": "com.zhqli.wikit",
-    "productName": "Wikit Desktop",
+    "appId": "com.bootsmind.wikit",
+    "productName": "Bootsmind Wikit",
     "files": [
       "src/**/*",
       "package.json"

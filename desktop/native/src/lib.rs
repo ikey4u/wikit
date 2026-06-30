@@ -15,7 +15,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::SyncSender;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -337,25 +339,36 @@ async fn translate_with_settings(settings: TranslationSettings, request: Transla
     })
 }
 
-fn choose_static_port() -> NapiResult<u16> {
-    let preferred = INTERNAL_FS_PORT.load(Ordering::SeqCst);
-    let port = util::get_free_web_tcp_port(Some(preferred))
-        .ok_or_else(|| Error::from_reason("failed to get static file server port"))?;
-    if port != preferred {
-        native_log(
-            "INFO",
-            "static-server",
-            format!("preferred port {preferred} unavailable, using {port}"),
-        );
-    } else {
-        native_log("INFO", "static-server", format!("using preferred port {port}"));
+fn try_bind_static_port(port: u16) -> Option<TcpListener> {
+    if util::is_chromium_restricted_port(port) {
+        return None;
     }
-    Ok(port)
+    TcpListener::bind(("127.0.0.1", port)).ok()
 }
 
-fn run_static_file_server(port: u16) -> AnyResult<()> {
+fn bind_static_server_port() -> NapiResult<(u16, TcpListener)> {
+    let preferred = INTERNAL_FS_PORT.load(Ordering::SeqCst);
+    if let Some(listener) = try_bind_static_port(preferred) {
+        native_log("INFO", "static-server", format!("using preferred port {preferred}"));
+        return Ok((preferred, listener));
+    }
+
+    for port in 6000..9000 {
+        if let Some(listener) = try_bind_static_port(port) {
+            native_log(
+                "INFO",
+                "static-server",
+                format!("preferred port {preferred} unavailable, using {port}"),
+            );
+            return Ok((port, listener));
+        }
+    }
+
+    Err(Error::from_reason("failed to bind static file server port"))
+}
+
+fn run_static_file_server(listener: TcpListener, ready_tx: SyncSender<()>) -> AnyResult<()> {
     use axum::{http::StatusCode, routing::get_service, Router};
-    use std::net::SocketAddr;
     use tower_http::services::ServeDir;
 
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -373,8 +386,11 @@ fn run_static_file_server(port: u16) -> AnyResult<()> {
                 )
             }),
         );
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        axum::Server::bind(&addr).serve(app.into_make_service()).await?;
+        let server = axum::Server::from_tcp(listener)?;
+        ready_tx
+            .send(())
+            .map_err(|_| anyhow!("static file server startup cancelled"))?;
+        server.serve(app.into_make_service()).await?;
         Ok(())
     })
 }
@@ -390,12 +406,14 @@ fn ensure_static_file_server() -> NapiResult<u16> {
         return Ok(port);
     }
 
-    let port = choose_static_port()?;
+    let (port, listener) = bind_static_server_port()?;
     INTERNAL_FS_PORT.store(port, Ordering::SeqCst);
     STATIC_SERVER_STARTED.store(true, Ordering::SeqCst);
     native_log("INFO", "static-server", format!("starting background thread on port {port}"));
+
+    let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {
-        if let Err(error) = run_static_file_server(port) {
+        if let Err(error) = run_static_file_server(listener, ready_tx) {
             native_log(
                 "ERROR",
                 "static-server",
@@ -405,7 +423,15 @@ fn ensure_static_file_server() -> NapiResult<u16> {
         }
     });
 
-    Ok(port)
+    match ready_rx.recv_timeout(Duration::from_secs(10)) {
+        Ok(()) => Ok(port),
+        Err(error) => {
+            STATIC_SERVER_STARTED.store(false, Ordering::SeqCst);
+            Err(Error::from_reason(format!(
+                "static file server startup timed out on port {port}: {error}"
+            )))
+        }
+    }
 }
 
 fn write_file_once(content: &[u8], file: &Path) -> NapiResult<()> {

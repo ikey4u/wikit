@@ -1,90 +1,85 @@
 <p align="center">
-  <img src="https://github.com/ikey4u/wikit/blob/master/desktop/electron/icons/128x128@2x.png?raw=true" alt="Wikit Application Icon"/>
+  <img src="https://github.com/ikey4u/wikit/blob/master/desktop/electron/icons/128x128@2x.png?raw=true" alt="Bootsmind Wikit Application Icon"/>
 </p>
 <p align="center">
-  Wikit is a free and open-source dictionary program that enable you translate word for different languages
+  Bootsmind Wikit is a free and open-source dictionary program that enables you to translate words across different languages
 </p>
 
 <hr/>
 
-wikit contains the following components
+Bootsmind Wikit contains the following components
 
-- Wikit CLI
+- Bootsmind Wikit CLI
 
-    A CLI tool which can be used to create wikit dictionary from plain text or other dictionary format.
+    A CLI tool which can be used to create `.wikit` dictionaries from plain text or other dictionary formats.
 
-- Wikit Desktop
+- Bootsmind Wikit Desktop
 
-    Desktop application for Windows, Linux and MacOS built with Electron and a Rust NAPI native module.
+    Desktop application for Windows, Linux and macOS built with Electron and a Rust NAPI native module.
 
-    ![wikit main screen](./docs/imgs/wikit-main-screen.jpg "wikit main screen")
+    ![Bootsmind Wikit main screen](./docs/imgs/wikit-main-screen.jpg "Bootsmind Wikit main screen")
 
-- Wikit Mobile
+- Bootsmind Wikit Mobile
 
-    Mobile application for Android, it's under planning.
+    Mobile application for Android; it's under planning.
 
 # Installation and Usage
 
-You can download Wikit CLI and Wikit Desktop from [Release](https://github.com/ikey4u/wikit/releases) page.
+You can download Bootsmind Wikit CLI and Bootsmind Wikit Desktop from the [Release](https://github.com/ikey4u/wikit/releases) page.
 
-To install dictionary, see [Wikit Introduction](https://github.com/ikey4u/wikit/wiki) for detail.
+To install dictionaries, see the [Wikit Introduction](https://github.com/ikey4u/wikit/wiki) for details.
 
-For Linux user, you can create a file in path `~/.local/share/applications/com.zhqli.wikit.desktop`
-(create if the path does not exist) with the following content:
+For Linux users, you can create a file at `~/.local/share/applications/com.bootsmind.wikit.desktop`
+(create the path if it does not exist) with the following content:
 
     #!/usr/bin/env xdg-open
 
     [Desktop Entry]
-    Name=Wikit Desktop
+    Name=Bootsmind Wikit
     Comment=A universal dictionary
     Path=/path/to/wikit
-    Exec=/path/to/wikit/wikit-desktop.AppImage 
+    Exec=/path/to/wikit/bootsmind-wikit.AppImage
     Terminal=false
     Type=Application
     Categories=Utility;
     Keywords=dictionary;dict;
 
-You should change `Path` and  `Exec` to your own, and run `update-desktop-database`
+Change `Path` and `Exec` to your own install location, then run:
 
     update-desktop-database ~/.local/share/applications
 
-after that you can open wikit desktop from your dash.                               
+After that you can open Bootsmind Wikit from your application launcher.
 
-If you are bother with the manual installation on linux, you can install it from
-[flathub](https://flathub.org/apps/details/com.zhqli.wikit).
+# Development
 
-# Developement
-
-To develop wikit CLI
+To develop Bootsmind Wikit CLI:
 
     cd cli
     cargo build
 
-To develop wikit desktop
+To develop Bootsmind Wikit Desktop:
 
     cd desktop/electron
     npm install
     npm start
 
-To develop wikit mobile
+To develop Bootsmind Wikit Mobile:
 
     cd android
     make start
 
 # Building
 
-To build wikit CLI
+To build Bootsmind Wikit CLI:
 
     cd cli
     cargo build --release
 
-To build wikit desktop
+To build Bootsmind Wikit Desktop:
 
-    cd desktop/electron
-    npm install
-    npm run dist
+    mise pkg
 
-To build wikit mobile
+To build Bootsmind Wikit Mobile:
 
     cd android
     make release

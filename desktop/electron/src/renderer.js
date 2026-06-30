@@ -188,8 +188,8 @@ function dmConfirm(message) {
   })
 }
 
-const translationHistoryKey = 'wikit.translation.history'
-const translationLanguageKey = 'wikit.translation.languages'
+const translationHistoryKey = 'bootsmind-wikit.translation.history'
+const translationLanguageKey = 'bootsmind-wikit.translation.languages'
 const maxTranslationHistory = 50
 const translationDebounceDelay = 700
 const languageLabels = {
