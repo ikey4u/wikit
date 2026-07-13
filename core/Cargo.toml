@@ -48,8 +48,13 @@ http = "0.2"
 headers = "0.3"
 wikit-proto = { path = "../proto" }
 log = "0.4"
+# Pure-Rust zstd (Trifecta / libzstd-rs-sys) for wikit entry compression.
+libzstd-rs-sys = "0.0.1-prerelease.2"
 # indirect dependencies, but build using source when target is android
 openssl = { version = "0.10", features = ["vendored"] }
+tantivy = "0.26"
+cang-jie = "0.19"
+jieba-rs = "0.9"
 
 [dependencies.nom]
 version = "6"

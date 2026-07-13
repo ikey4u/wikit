@@ -20,12 +20,18 @@ const noDictionary = document.getElementById('noDictionary')
 const importWikitDictBtn = document.getElementById('importWikitDictBtn')
 const importMdxDictBtn = document.getElementById('importMdxDictBtn')
 const importDictStatus = document.getElementById('importDictStatus')
+const importDictProgress = document.getElementById('importDictProgress')
 const openConfigDirBtn = document.getElementById('openConfigDirBtn')
-const addDictMenuBtn = document.getElementById('addDictMenuBtn')
-const addDictMenu = document.getElementById('addDictMenu')
+const addDictMenuBtn = document.getElementById('dictMenuBtn')
+const dictMenuBtn = addDictMenuBtn
+const addDictMenu = document.getElementById('dictMenu')
+const dictMenu = addDictMenu
 const toolbarImportWikitBtn = document.getElementById('toolbarImportWikitBtn')
 const toolbarImportMdxBtn = document.getElementById('toolbarImportMdxBtn')
+const toolbarEditDictBtn = document.getElementById('toolbarEditDictBtn')
+const toolbarRemoveDictBtn = document.getElementById('toolbarRemoveDictBtn')
 const toolbarImportStatus = document.getElementById('toolbarImportStatus')
+const toolbarImportProgress = document.getElementById('toolbarImportProgress')
 const wordContent = document.getElementById('wordContent')
 const meaningPlaceholder = document.getElementById('meaningPlaceholder')
 const candidateList = document.getElementById('candidateList')
@@ -33,6 +39,8 @@ const noCandidate = document.getElementById('noCandidate')
 const meaningFrame = document.getElementById('meaningFrame')
 const previewFrame = document.getElementById('previewFrame')
 const suggestionPopup = document.getElementById('suggestionPopup')
+const lookupBackBtn = document.getElementById('lookupBackBtn')
+const lookupForwardBtn = document.getElementById('lookupForwardBtn')
 const dictMakerTab = document.getElementById('dictMakerTab')
 const mdxConverterTab = document.getElementById('mdxConverterTab')
 const moreToolsTab = document.getElementById('moreToolsTab')
@@ -103,6 +111,11 @@ reportRendererLog('renderer.bootstrap', 'info', 'script started')
 let lookupTimer = null
 let latestLookup = null
 let currentResponse = null
+let pendingMeaningHash = ''
+let lookupHistoryStack = []
+let lookupHistoryIndex = -1
+let lookupHistoryNavigating = false
+const maxLookupHistory = 80
 let previewSocket = null
 let activeMode = 'translate'
 let currentTranslationSettings = null
@@ -117,6 +130,8 @@ let currentEntry = null
 let isModified = false
 let previewTimer = null
 let previewPort = null
+let dictMetaCssRef = ''
+let dictMetaJsRef = ''
 
 let _dmResolve = null
 let _dmDone = false
@@ -238,14 +253,60 @@ function showPlaceholder(text) {
   hide(suggestionPopup)
 }
 
-function renderCandidates(words, response) {
+async function navigateToWord(word, options = {}) {
+  const target = String(word || '').trim()
+  if (!target) return
+
+  const dictid = options.dictid || dictSelect.value
+  if (!dictid) return
+
+  if (options.dictid && dictSelect.value !== options.dictid) {
+    const hasDict = Array.from(dictSelect.options).some((opt) => opt.value === options.dictid)
+    if (hasDict) {
+      dictSelect.value = options.dictid
+    }
+  }
+
+  searchInput.value = target
+  hide(suggestionPopup)
+  await lookupCurrentWord({
+    pushHistory: options.pushHistory !== false,
+    hash: options.hash || '',
+    preferredWord: target,
+    forceOpen: options.forceOpen === true,
+  })
+}
+
+function escapeHtmlText(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function highlightSnippet(snippet, query) {
+  const text = String(snippet || '')
+  const q = String(query || '').trim()
+  if (!text || !q) return escapeHtmlText(text)
+  try {
+    const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+    return escapeHtmlText(text).replace(re, '<mark>$1</mark>')
+  } catch (_error) {
+    return escapeHtmlText(text)
+  }
+}
+
+function renderCandidates(words, response, bodyHits = [], query = '') {
   candidateList.replaceChildren()
   hide(suggestionPopup)
   hide(meaningPlaceholder)
   hide(meaningFrame)
   hide(previewFrame)
 
-  if (!words.length) {
+  const headwords = Array.isArray(words) ? words : []
+  const bodies = Array.isArray(bodyHits) ? bodyHits : []
+  if (!headwords.length && !bodies.length) {
     hide(candidateList)
     show(noCandidate)
     return
@@ -254,34 +315,362 @@ function renderCandidates(words, response) {
   hide(noCandidate)
   show(candidateList)
 
-  for (const word of words) {
+  const openEntry = (word) => {
+    navigateToWord(word, { pushHistory: true, forceOpen: true }).catch(() => {})
+  }
+
+  for (const word of headwords) {
     const item = document.createElement('div')
+    item.className = 'candidate-row'
     const button = document.createElement('button')
-    button.className = 'button'
+    button.className = 'candidate-item'
     button.type = 'button'
-    button.textContent = word
-    button.addEventListener('click', () => {
-      searchInput.value = word
-      renderMeaning(word, response)
-    })
+    button.innerHTML = `
+      <span class="candidate-item-head">
+        <span class="candidate-item-word">${escapeHtmlText(word)}</span>
+        <span class="candidate-item-kind is-headword">词头</span>
+      </span>
+    `
+    button.addEventListener('click', () => openEntry(word))
+    item.appendChild(button)
+    candidateList.appendChild(item)
+  }
+
+  for (const hit of bodies) {
+    const word = hit.word || hit.headword
+    if (!word) continue
+    const snippet = hit.snippet || ''
+    const item = document.createElement('div')
+    item.className = 'candidate-row'
+    const button = document.createElement('button')
+    button.className = 'candidate-item is-body'
+    button.type = 'button'
+    button.title = snippet || word
+    button.innerHTML = `
+      <span class="candidate-item-head">
+        <span class="candidate-item-word">${escapeHtmlText(word)}</span>
+        <span class="candidate-item-kind">正文</span>
+      </span>
+      ${snippet ? `<span class="candidate-item-snippet">${highlightSnippet(snippet, query)}</span>` : ''}
+    `
+    button.addEventListener('click', () => openEntry(word))
     item.appendChild(button)
     candidateList.appendChild(item)
   }
 }
 
-function renderMeaning(word, response) {
-  if (!response || !response.words || !response.words[word]) {
+function updateLookupHistoryButtons() {
+  if (lookupBackBtn) {
+    lookupBackBtn.disabled = lookupHistoryIndex <= 0
+  }
+  if (lookupForwardBtn) {
+    lookupForwardBtn.disabled = lookupHistoryIndex < 0 || lookupHistoryIndex >= lookupHistoryStack.length - 1
+  }
+}
+
+function clearLookupHistory() {
+  lookupHistoryStack = []
+  lookupHistoryIndex = -1
+  lookupHistoryNavigating = false
+  updateLookupHistoryButtons()
+}
+
+function pushLookupHistory(word, dictid) {
+  if (lookupHistoryNavigating) return
+  const normalized = String(word || '').trim()
+  const dict = String(dictid || '').trim()
+  if (!normalized || !dict) return
+
+  const current = lookupHistoryIndex >= 0 ? lookupHistoryStack[lookupHistoryIndex] : null
+  if (current && current.word === normalized && current.dictid === dict) {
+    updateLookupHistoryButtons()
     return
   }
 
-  const chromeStyle = '<style>html{background:#fff;}body{margin:0;padding:16px 18px 32px;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;line-height:1.58;}body>*:first-child{margin-top:0;}a{color:#0969da;}</style>'
-  const content = `<!DOCTYPE html><html><head><meta charset="UTF-8">${response.script}${response.style}${chromeStyle}</head><body>${response.words[word]}</body></html>`
+  lookupHistoryStack = lookupHistoryStack.slice(0, lookupHistoryIndex + 1)
+  lookupHistoryStack.push({ word: normalized, dictid: dict })
+  if (lookupHistoryStack.length > maxLookupHistory) {
+    const overflow = lookupHistoryStack.length - maxLookupHistory
+    lookupHistoryStack = lookupHistoryStack.slice(overflow)
+  }
+  lookupHistoryIndex = lookupHistoryStack.length - 1
+  updateLookupHistoryButtons()
+}
+
+function goLookupHistory(delta) {
+  const next = lookupHistoryIndex + delta
+  if (next < 0 || next >= lookupHistoryStack.length) return
+  const entry = lookupHistoryStack[next]
+  if (!entry) return
+  lookupHistoryIndex = next
+  lookupHistoryNavigating = true
+  updateLookupHistoryButtons()
+  navigateToWord(entry.word, {
+    dictid: entry.dictid,
+    pushHistory: false,
+    forceOpen: true,
+  }).finally(() => {
+    lookupHistoryNavigating = false
+    updateLookupHistoryButtons()
+  })
+}
+
+function decodeHrefPart(value) {
+  try {
+    return decodeURIComponent(value)
+  } catch (_error) {
+    return value
+  }
+}
+
+function parseEntryHref(href) {
+  let rest = String(href || '').replace(/^entry:\/*/i, '')
+  rest = decodeHrefPart(rest)
+  const hashIndex = rest.indexOf('#')
+  let word = rest
+  let hash = ''
+  if (hashIndex >= 0) {
+    word = rest.slice(0, hashIndex)
+    hash = rest.slice(hashIndex + 1)
+  }
+  word = word.replace(/\/+$/, '').trim()
+  return { word, hash }
+}
+
+function parseSoundHref(href) {
+  return decodeHrefPart(String(href || '').replace(/^sound:\/*/i, ''))
+    .replace(/^[\\/]+/, '')
+    .trim()
+}
+
+function findExactWordKey(words, word) {
+  if (!words || !word) return null
+  if (Object.prototype.hasOwnProperty.call(words, word)) return word
+  const lower = word.toLowerCase()
+  return Object.keys(words).find((key) => key.toLowerCase() === lower) || null
+}
+
+function parseLinkRedirect(body) {
+  const match = String(body || '').trim().match(/^@@@LINK=\s*(.+?)\s*$/i)
+  return match ? match[1].trim() : null
+}
+
+async function resolveLookupEntry(dictid, word, response, depth = 0) {
+  const words = response?.words || {}
+  const exactKey = findExactWordKey(words, word)
+  if (!exactKey) {
+    return { word, response, html: null, resolved: false }
+  }
+
+  const body = words[exactKey]
+  const redirect = parseLinkRedirect(body)
+  if (!redirect) {
+    return { word: exactKey, response, html: body, resolved: true }
+  }
+  if (depth >= 6) {
+    return { word: exactKey, response, html: body, resolved: true }
+  }
+
+  const cachedTarget = findExactWordKey(words, redirect)
+  if (cachedTarget && !parseLinkRedirect(words[cachedTarget])) {
+    return { word: cachedTarget, response, html: words[cachedTarget], resolved: true }
+  }
+
+  const nextResponse = await window.wikit.lookup(dictid, redirect)
+  return resolveLookupEntry(dictid, redirect, nextResponse, depth + 1)
+}
+
+function scrollMeaningToHash(hash) {
+  if (!hash || !meaningFrame) return
+  try {
+    const doc = meaningFrame.contentDocument
+    if (!doc) return
+    const el = doc.getElementById(hash) || doc.querySelector(`[name="${CSS.escape(hash)}"]`)
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'start' })
+    }
+  } catch (_error) {
+    // ignore cross-document access failures
+  }
+}
+
+function escapeHtmlAttr(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+}
+
+function sanitizeMeaningHtml(html) {
+  let out = String(html || '')
+  // Convert entry/sound links so the iframe never navigates to blocked custom schemes.
+  out = out.replace(/\shref\s*=\s*(["'])((?:entry|sound):[\s\S]*?)\1/gi, (_match, _quote, href) => (
+    ` href="#" data-wikit-nav="${escapeHtmlAttr(href)}"`
+  ))
+  // Preserve known OALD actions as data attributes; drop other inline handlers (CSP blocks them).
+  out = out.replace(
+    /\s+onclick\s*=\s*(["'])\s*(toggle_active|toggle_enlarger)\s*\(\s*this\s*\)\s*;?\s*\1/gi,
+    ' data-wikit-action="$2" role="button" tabindex="0"'
+  )
+  out = out.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  return out
+}
+
+function toggleMeaningUnbox(titleEl) {
+  const panel = titleEl.closest('.unbox, [unbox]')
+  if (!panel) return false
+  panel.classList.toggle('is-active')
+  return true
+}
+
+function toggleMeaningEnlarger(el) {
+  const root = el.id === 'ox-enlarge' ? el : (el.closest('#ox-enlarge') || el)
+  if (!root) return false
+  const full = root.querySelector('img.fullsize')
+  const thumb = root.querySelector('img.thumb')
+  if (!full || !thumb) return false
+  const currentlyHidden = /display\s*:\s*none/i.test(full.getAttribute('style') || '') || full.style.display === 'none'
+  if (currentlyHidden) {
+    full.style.display = ''
+    thumb.style.display = 'none'
+  } else {
+    full.style.display = 'none'
+    thumb.style.display = ''
+  }
+  const label = root.querySelector('.ox-enlarge-label')
+  if (label) {
+    label.textContent = currentlyHidden ? 'click to reduce image size' : 'enlarge image'
+  }
+  return true
+}
+
+function handleMeaningFrameClick(event) {
+  const target = event.target
+  if (!target || typeof target.closest !== 'function') return
+
+  const actionEl = target.closest('[data-wikit-action]')
+  const action = actionEl?.getAttribute('data-wikit-action') || ''
+  if (action === 'toggle_active' || target.closest('.box_title, pnc.heading')) {
+    const title = action === 'toggle_active' ? actionEl : target.closest('.box_title, pnc.heading, [data-wikit-action="toggle_active"]')
+    if (title && toggleMeaningUnbox(title)) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+  }
+  if (action === 'toggle_enlarger' || target.closest('#ox-enlarge')) {
+    const el = actionEl || target.closest('#ox-enlarge')
+    if (el && toggleMeaningEnlarger(el)) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+  }
+
+  const anchor = target.closest('a')
+  if (!anchor) return
+
+  const nav = anchor.getAttribute('data-wikit-nav')
+  const href = nav || anchor.getAttribute('href') || ''
+
+  if (nav || /^(entry|sound):/i.test(href)) {
+    event.preventDefault()
+    event.stopPropagation()
+    handleDictionaryNavMessage(nav || href).catch(() => {})
+    return
+  }
+
+  if (href.charAt(0) === '#') {
+    event.preventDefault()
+    event.stopPropagation()
+    const id = decodeHrefPart(href.slice(1))
+    if (!id) return
+    try {
+      const doc = meaningFrame.contentDocument
+      if (!doc) return
+      const el = doc.getElementById(id) || doc.querySelector(`[name="${CSS.escape(id)}"]`)
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'start' })
+      }
+    } catch (_error) {
+      // ignore
+    }
+  }
+}
+
+function bindMeaningFrameNavigation() {
+  try {
+    const doc = meaningFrame.contentDocument
+    if (!doc || !doc.documentElement) return
+    if (doc.documentElement.dataset.wikitNavBound === '1') return
+    doc.documentElement.dataset.wikitNavBound = '1'
+    doc.addEventListener('click', handleMeaningFrameClick, true)
+    doc.addEventListener('auxclick', handleMeaningFrameClick, true)
+  } catch (_error) {
+    // ignore
+  }
+}
+
+function renderMeaning(word, response, options = {}) {
+  const html = options.html || (response && response.words && response.words[word])
+  if (!html) {
+    return
+  }
+
+  pendingMeaningHash = options.hash || ''
+
+  // Base chrome first; dictionary CSS after so it can override.
+  // Do not inject dictionary <script> into srcdoc: CSP blocks inline scripts.
+  const chromeStyle = '<style>html{background:#fff;}body{margin:0;padding:16px 18px 32px;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;line-height:1.58;}body>*:first-child{margin-top:0;}a{color:#0969da;cursor:pointer;}</style>'
+  const bodyHtml = sanitizeMeaningHtml(html)
+  const content = `<!DOCTYPE html><html><head><meta charset="UTF-8">${chromeStyle}${response.style || ''}</head><body>${bodyHtml}</body></html>`
   hide(meaningPlaceholder)
   hide(candidateList)
   hide(noCandidate)
   hide(previewFrame)
   show(meaningFrame)
+  meaningFrame.onload = () => {
+    bindMeaningFrameNavigation()
+    resolveMeaningMediaResources().catch(() => {})
+    if (pendingMeaningHash) {
+      scrollMeaningToHash(pendingMeaningHash)
+      pendingMeaningHash = ''
+    }
+  }
   meaningFrame.srcdoc = content
+}
+
+function isExternalOrDataUrl(url) {
+  return /^(?:https?:|data:|blob:|file:|#|\/\/)/i.test(String(url || '').trim())
+}
+
+async function resolveMeaningMediaResources() {
+  const dictid = dictSelect && dictSelect.value
+  if (!dictid || !window.wikit.lookupResource) return
+  let doc
+  try {
+    doc = meaningFrame.contentDocument
+  } catch (_error) {
+    return
+  }
+  if (!doc) return
+
+  const nodes = Array.from(doc.querySelectorAll('img[src], source[src], audio[src], video[src]'))
+  await Promise.all(nodes.map(async (el) => {
+    const src = el.getAttribute('src') || ''
+    if (!src || isExternalOrDataUrl(src)) return
+    const key = src.replace(/^file:\/*/i, '').trim()
+    if (!key) return
+    try {
+      const res = await window.wikit.lookupResource(dictid, key)
+      if (res && res.found && res.url) {
+        el.setAttribute('src', res.url)
+      }
+    } catch (_error) {
+      // ignore missing resources
+    }
+  }))
 }
 
 function isLookupPanelActive() {
@@ -294,13 +683,88 @@ function setImportControlsDisabled(disabled) {
     importMdxDictBtn,
     toolbarImportWikitBtn,
     toolbarImportMdxBtn,
-    addDictMenuBtn
+    dictMenuBtn
   ]) {
     if (button) {
       button.disabled = disabled
     }
   }
+  if (!disabled) {
+    updateDictMenuState()
+  }
 }
+
+function updateDictMenuState() {
+  const hasDict = !!(dictSelect && dictSelect.value && dictSelect.options.length)
+  if (toolbarEditDictBtn) toolbarEditDictBtn.disabled = !hasDict
+  if (toolbarRemoveDictBtn) toolbarRemoveDictBtn.disabled = !hasDict
+}
+
+function resetLookupSurface() {
+  currentResponse = null
+  latestLookup = null
+  pendingMeaningHash = ''
+  if (searchInput) searchInput.value = ''
+  hide(suggestionPopup)
+  clearLookupHistory()
+  showPlaceholder('Type a word to look up ...')
+}
+
+async function playDictionarySound(resource) {
+  const name = String(resource || '').trim()
+  if (!name) return
+  const dictid = dictSelect && dictSelect.value
+  if (!dictid || !window.wikit.lookupResource) {
+    reportRendererLog('renderer.dict-sound', 'warn', 'sound lookup unavailable', { name })
+    return
+  }
+  try {
+    const res = await window.wikit.lookupResource(dictid, name)
+    if (!res || !res.found || !res.url) {
+      reportRendererLog('renderer.dict-sound', 'warn', 'sound resource not found', { name })
+      return
+    }
+    const audio = new Audio(res.url)
+    await audio.play()
+  } catch (error) {
+    reportRendererLog('renderer.dict-sound', 'error', 'failed to play sound', {
+      name,
+      error: String(error && error.message ? error.message : error),
+    })
+  }
+}
+
+async function handleDictionaryNavMessage(href) {
+  if (/^entry:/i.test(href)) {
+    const { word, hash } = parseEntryHref(href)
+    if (!word) return
+    await navigateToWord(word, { pushHistory: true, hash, forceOpen: true })
+    return
+  }
+  if (/^sound:/i.test(href)) {
+    await playDictionarySound(parseSoundHref(href))
+  }
+}
+
+function closeAddDictMenu() {
+  if (!dictMenu || !dictMenuBtn) return
+  hide(dictMenu)
+  dictMenuBtn.setAttribute('aria-expanded', 'false')
+}
+
+function toggleAddDictMenu() {
+  if (!dictMenu || !dictMenuBtn) return
+  const willOpen = dictMenu.classList.contains('is-hidden')
+  if (willOpen) {
+    updateDictMenuState()
+    show(dictMenu)
+    dictMenuBtn.setAttribute('aria-expanded', 'true')
+  } else {
+    closeAddDictMenu()
+  }
+}
+
+let importStatusTimer = null
 
 function applyImportStatus(element, text, type, baseClass) {
   element.textContent = text
@@ -312,34 +776,65 @@ function applyImportStatus(element, text, type, baseClass) {
 }
 
 function showImportDictStatus(text, type) {
+  if (importStatusTimer) {
+    clearTimeout(importStatusTimer)
+    importStatusTimer = null
+  }
+
   if (isLookupPanelActive()) {
     applyImportStatus(toolbarImportStatus, text, type, 'dict-toolbar-status')
     hide(importDictStatus)
-    return
+  } else {
+    applyImportStatus(importDictStatus, text, type, 'dict-empty-status')
+    hide(toolbarImportStatus)
   }
-  applyImportStatus(importDictStatus, text, type, 'dict-empty-status')
-  hide(toolbarImportStatus)
+
+  if (type === 'success') {
+    const delay = text.length > 40 ? 5000 : 2500
+    importStatusTimer = setTimeout(() => {
+      hideImportDictStatus()
+      importStatusTimer = null
+    }, delay)
+  }
 }
 
 function hideImportDictStatus() {
+  if (importStatusTimer) {
+    clearTimeout(importStatusTimer)
+    importStatusTimer = null
+  }
   importDictStatus.textContent = ''
   importDictStatus.className = 'dict-empty-status is-hidden'
   toolbarImportStatus.textContent = ''
   toolbarImportStatus.className = 'dict-toolbar-status is-hidden'
+  hideImportDictProgress()
 }
 
-function closeAddDictMenu() {
-  hide(addDictMenu)
-  addDictMenuBtn.setAttribute('aria-expanded', 'false')
+function activeImportProgressEl() {
+  return isLookupPanelActive() ? toolbarImportProgress : importDictProgress
 }
 
-function toggleAddDictMenu() {
-  const willOpen = addDictMenu.classList.contains('is-hidden')
-  if (willOpen) {
-    show(addDictMenu)
-    addDictMenuBtn.setAttribute('aria-expanded', 'true')
-  } else {
-    closeAddDictMenu()
+function showImportDictProgress(pct) {
+  const bar = activeImportProgressEl()
+  if (!bar) return
+  const value = Math.min(Math.max(Math.round(pct), 0), 100)
+  bar.classList.remove('is-hidden')
+  bar.setAttribute('aria-hidden', 'false')
+  const fill = bar.querySelector('.dm-progress-fill')
+  const text = bar.querySelector('.dm-progress-text')
+  if (fill) fill.style.width = `${value}%`
+  if (text) text.textContent = `${value}%`
+}
+
+function hideImportDictProgress() {
+  for (const bar of [importDictProgress, toolbarImportProgress]) {
+    if (!bar) continue
+    bar.classList.add('is-hidden')
+    bar.setAttribute('aria-hidden', 'true')
+    const fill = bar.querySelector('.dm-progress-fill')
+    const text = bar.querySelector('.dm-progress-text')
+    if (fill) fill.style.width = '0%'
+    if (text) text.textContent = '0%'
   }
 }
 
@@ -358,32 +853,131 @@ async function importDictionary(expectedSuffix) {
   }
 
   setImportControlsDisabled(true)
+  hideImportDictProgress()
   showImportDictStatus(
-    expectedSuffix === 'mdx' ? '正在转换 MDX 词典，请稍候…' : '正在加载词典…',
+    expectedSuffix === 'mdx' ? '正在转换 MDX 词典…' : '正在加载词典…',
     ''
   )
+  if (expectedSuffix === 'mdx') {
+    showImportDictProgress(0)
+  }
 
+  let unlistenProgress = null
   try {
+    if (expectedSuffix === 'mdx') {
+      unlistenProgress = window.wikit.onBuildProgress((pct) => {
+        const value = Math.min(Math.max(Math.round((Number(pct) || 0) * 100), 0), 100)
+        showImportDictProgress(value)
+        showImportDictStatus(`正在转换 MDX 词典… ${value}%`, '')
+      })
+    }
     const dict = await window.wikit.loadLocalDict(filePath)
     await loadDictionaries()
     if (dict && dict.id) {
       dictSelect.value = dict.id
     }
-    showImportDictStatus(
-      `已导入：${dict && dict.name ? dict.name : '词典'}`,
-      'success'
-    )
+
+    let missingStyle = false
+    if (dict && dict.id) {
+      try {
+        const info = await window.wikit.getDictInfo(dict.id)
+        missingStyle = !((info && info.style) || '').trim()
+      } catch (_error) {
+        missingStyle = false
+      }
+    }
+
+    hideImportDictProgress()
+    const dictName = dict && dict.name ? dict.name : '词典'
+    if (missingStyle && expectedSuffix === 'mdx') {
+      showImportDictStatus(
+        `已导入：${dictName}（未找到样式，请将词条引用的 .css/.js 放到 MDX 同目录后重新导入）`,
+        'success'
+      )
+    } else {
+      showImportDictStatus(`已导入：${dictName}`, 'success')
+    }
     searchInput.focus()
   } catch (error) {
+    hideImportDictProgress()
     showImportDictStatus('导入失败：' + getErrorMessage(error), 'error')
   } finally {
+    if (unlistenProgress) unlistenProgress()
     setImportControlsDisabled(false)
   }
+}
+
+async function removeCurrentDictionary() {
+  closeAddDictMenu()
+  const dictid = dictSelect.value
+  if (!dictid) {
+    showImportDictStatus('没有可删除的词典', 'error')
+    return
+  }
+  const selected = dictSelect.options[dictSelect.selectedIndex]
+  const dictName = selected ? selected.textContent : '当前词典'
+  const confirmed = await dmConfirm(`确定从列表中删除「${dictName}」？\n（不会删除词典文件）`)
+  if (!confirmed) return
+
+  try {
+    const removed = await window.wikit.removeLocalDict(dictid)
+    const wasEditingSame =
+      deCurrentDictId && (deCurrentDictId === dictid)
+
+    resetLookupSurface()
+    await loadDictionaries()
+    await loadDeDictList()
+
+    if (wasEditingSame) {
+      deCurrentDictId = null
+      deCurrentDictInfo = null
+      deCurrentWord = null
+      deCurrentDefinition = null
+      deDictMeta = null
+      deDictSelect.value = ''
+      deDictSelect.dispatchEvent(new Event('change'))
+    }
+
+    if (removed) {
+      if (dictSelect.options.length === 0) {
+        showImportDictStatus(`已删除：${dictName}。请添加词典后开始查词。`, 'success')
+      } else {
+        showImportDictStatus(`已删除：${dictName}`, 'success')
+        if (dictSelect.value) {
+          lookupCurrentWord()
+        }
+      }
+    } else {
+      showImportDictStatus('未找到该词典配置，可能已删除', 'error')
+    }
+  } catch (error) {
+    showImportDictStatus('删除失败：' + getErrorMessage(error), 'error')
+  }
+}
+
+async function openEditCurrentDictionary() {
+  closeAddDictMenu()
+  const dictid = dictSelect.value
+  if (!dictid) {
+    showImportDictStatus('请先选择词典', 'error')
+    return
+  }
+
+  const dictName = dictSelect.options[dictSelect.selectedIndex]?.textContent || dictid
+  setActiveMode('tools')
+  setActiveTool('dict-editor')
+  await loadDeDictList()
+  if (deDictSelect.value !== dictid) {
+    addDeDictOption({ id: dictid, name: dictName })
+    deDictSelect.value = dictid
+  }
+  deDictSelect.dispatchEvent(new Event('change'))
 }
 
 async function loadDictionaries() {
   try {
     const dictionaries = await window.wikit.getDictList()
+    const previousId = dictSelect.value
     dictSelect.replaceChildren()
 
     for (const dictionary of dictionaries) {
@@ -394,23 +988,35 @@ async function loadDictionaries() {
     }
 
     if (dictionaries.length) {
+      const stillThere = dictionaries.some((item) => item.id === previousId)
+      dictSelect.value = stillThere ? previousId : dictionaries[0].id
       hide(noDictionary)
       show(wordContent)
       hideImportDictStatus()
-      showPlaceholder('Type a word to look up ...')
+      if (!searchInput.value.trim()) {
+        showPlaceholder('Type a word to look up ...')
+      }
     } else {
       hide(wordContent)
       show(noDictionary)
+      resetLookupSurface()
     }
+    updateDictMenuState()
   } catch (_error) {
     hide(wordContent)
     show(noDictionary)
+    resetLookupSurface()
+    updateDictMenuState()
   }
 }
 
-async function lookupCurrentWord() {
+async function lookupCurrentWord(options = {}) {
   const dictid = dictSelect.value
-  const word = searchInput.value.trim().toLowerCase()
+  const preferredWord = String(options.preferredWord || searchInput.value || '').trim()
+  const word = preferredWord.toLowerCase()
+  const pushHistory = options.pushHistory !== false
+  const hash = options.hash || ''
+  const forceOpen = options.forceOpen === true
 
   if (!dictid || !word) {
     currentResponse = null
@@ -421,6 +1027,21 @@ async function lookupCurrentWord() {
   const token = Symbol(word)
   latestLookup = token
 
+  const fetchBodyHits = async (excludeWords = []) => {
+    try {
+      const searchHits = await window.wikit.searchDict(dictid, preferredWord)
+      const exclude = new Set(
+        (excludeWords || []).map((w) => String(w || '').toLowerCase()).filter(Boolean)
+      )
+      return (searchHits || []).filter((h) => {
+        if (!h || h.kind !== 'body' || !h.word) return false
+        return !exclude.has(String(h.word).toLowerCase())
+      })
+    } catch (_searchError) {
+      return []
+    }
+  }
+
   try {
     const response = await window.wikit.lookup(dictid, word)
 
@@ -428,17 +1049,63 @@ async function lookupCurrentWord() {
       return
     }
 
-    currentResponse = response
-    const words = Object.keys(response.words || {}).sort()
+    const resolved = await resolveLookupEntry(dictid, preferredWord, response)
+    if (latestLookup !== token) {
+      return
+    }
 
-    if (response.words && response.words[word]) {
-      renderMeaning(word, response)
+    currentResponse = resolved.response
+    const words = Object.keys(resolved.response?.words || {}).sort()
+
+    // Clicking a result should open the entry, not re-show the fulltext list.
+    if (forceOpen && resolved.resolved && resolved.html) {
+      if (searchInput.value.trim() !== resolved.word) {
+        searchInput.value = resolved.word
+      }
+      if (pushHistory) {
+        pushLookupHistory(resolved.word, dictid)
+      }
+      renderMeaning(resolved.word, resolved.response, { html: resolved.html, hash })
+      return
+    }
+
+    // Always query fulltext so body hits are visible even when a headword also matches.
+    const bodyHits = await fetchBodyHits(
+      resolved.resolved ? [resolved.word, ...words] : words
+    )
+    if (latestLookup !== token) {
+      return
+    }
+
+    if (resolved.resolved && resolved.html && bodyHits.length === 0) {
+      if (searchInput.value.trim() !== resolved.word) {
+        searchInput.value = resolved.word
+      }
+      if (pushHistory) {
+        pushLookupHistory(resolved.word, dictid)
+      }
+      renderMeaning(resolved.word, resolved.response, { html: resolved.html, hash })
+    } else if (resolved.resolved && resolved.html && bodyHits.length > 0) {
+      // Headword hit + other entries that contain the query in body → show both.
+      const headwords = [resolved.word, ...words.filter((w) => w !== resolved.word)]
+      if (pushHistory) {
+        pushLookupHistory(resolved.word, dictid)
+      }
+      renderCandidates(headwords, resolved.response, bodyHits, preferredWord)
     } else {
-      renderCandidates(words, response)
+      renderCandidates(words, resolved.response, bodyHits, preferredWord)
     }
   } catch (_error) {
     currentResponse = null
-    renderCandidates([], null)
+    if (forceOpen) {
+      showPlaceholder('Word not found')
+      return
+    }
+    const bodyHits = await fetchBodyHits([])
+    if (latestLookup !== token) {
+      return
+    }
+    renderCandidates([], null, bodyHits, preferredWord)
   }
 }
 
@@ -880,7 +1547,34 @@ document.addEventListener('keydown', (event) => {
   }
 })
 searchInput.addEventListener('input', scheduleLookup)
-dictSelect.addEventListener('change', lookupCurrentWord)
+dictSelect.addEventListener('change', () => {
+  updateDictMenuState()
+  clearLookupHistory()
+  lookupCurrentWord({ pushHistory: true })
+})
+if (lookupBackBtn) {
+  lookupBackBtn.addEventListener('click', () => goLookupHistory(-1))
+}
+if (lookupForwardBtn) {
+  lookupForwardBtn.addEventListener('click', () => goLookupHistory(1))
+}
+document.addEventListener('keydown', (event) => {
+  if (activeMode !== 'dictionary' || !isLookupPanelActive()) return
+  const isMeta = event.metaKey || event.ctrlKey
+  if (isMeta && event.key === '[') {
+    event.preventDefault()
+    goLookupHistory(-1)
+  } else if (isMeta && event.key === ']') {
+    event.preventDefault()
+    goLookupHistory(1)
+  } else if (event.altKey && event.key === 'ArrowLeft') {
+    event.preventDefault()
+    goLookupHistory(-1)
+  } else if (event.altKey && event.key === 'ArrowRight') {
+    event.preventDefault()
+    goLookupHistory(1)
+  }
+})
 importWikitDictBtn.addEventListener('click', () => importDictionary('wikit'))
 importMdxDictBtn.addEventListener('click', () => importDictionary('mdx'))
 toolbarImportWikitBtn.addEventListener('click', () => importDictionary('wikit'))
@@ -889,14 +1583,20 @@ addDictMenuBtn.addEventListener('click', (event) => {
   event.stopPropagation()
   toggleAddDictMenu()
 })
+toolbarEditDictBtn.addEventListener('click', () => {
+  openEditCurrentDictionary().catch(() => {})
+})
+toolbarRemoveDictBtn.addEventListener('click', () => {
+  removeCurrentDictionary().catch(() => {})
+})
 openConfigDirBtn.addEventListener('click', () => {
   window.wikit.openConfigDir().catch(() => {})
 })
 document.addEventListener('click', (event) => {
-  if (!addDictMenu || addDictMenu.classList.contains('is-hidden')) {
+  if (!dictMenu || dictMenu.classList.contains('is-hidden')) {
     return
   }
-  if (event.target.closest('.dict-add-control')) {
+  if (event.target.closest('.dict-menu-control')) {
     return
   }
   closeAddDictMenu()
@@ -940,6 +1640,8 @@ document.querySelectorAll('.tools-menu-item').forEach((item) => {
 
 document.getElementById('openDictDir').addEventListener('click', openDictDirectory)
 document.getElementById('editMetaBtn').addEventListener('click', openMetaEditor)
+document.getElementById('importCssBtn').addEventListener('click', () => importDictAsset('css'))
+document.getElementById('importJsBtn').addEventListener('click', () => importDictAsset('js'))
 addEntryBtn.addEventListener('click', addNewEntry)
 saveEntryBtn.addEventListener('click', saveCurrentEntry)
 deleteEntryBtn.addEventListener('click', deleteCurrentEntry)
@@ -1024,6 +1726,175 @@ async function openDictDirectory() {
   }
 }
 
+function getDictDirName() {
+  if (!currentDictDir) return ''
+  return currentDictDir.split(/[\\/]/).pop() || currentDictDir
+}
+
+function getDictTomlPath() {
+  // LocalDictionary::create reads <stem>.toml next to entries.txt
+  return `${currentDictDir}/entries.toml`
+}
+
+function getLegacyDictTomlPath() {
+  const dirName = getDictDirName()
+  return `${currentDictDir}/${dirName}.toml`
+}
+
+function resolveAssetRef(ref, fallbackName) {
+  const value = (ref || '').trim()
+  if (value.startsWith('@')) {
+    return `${currentDictDir}/${value.slice(1)}`
+  }
+  if (!value) {
+    return `${currentDictDir}/${fallbackName}`
+  }
+  return null
+}
+
+async function readDictMeta() {
+  const dirName = getDictDirName()
+  const data = {
+    name: dirName,
+    version: '1.0',
+    authors: [''],
+    distributors: [''],
+    description: '',
+    homepage: '',
+    css: '',
+    js: ''
+  }
+  const candidates = [getDictTomlPath(), getLegacyDictTomlPath()]
+  for (const tomlPath of candidates) {
+    try {
+      const content = await window.wikit.readTextFile(tomlPath)
+      if (!content) continue
+      const parsed = parseToml(content)
+      if (parsed.name) data.name = parsed.name
+      if (parsed.version) data.version = parsed.version
+      if (parsed.authors) data.authors = parsed.authors
+      if (parsed.distributors) data.distributors = parsed.distributors
+      if (parsed.description) data.description = parsed.description
+      if (parsed.homepage) data.homepage = parsed.homepage
+      if (parsed.css) data.css = parsed.css
+      if (parsed.js) data.js = parsed.js
+      break
+    } catch (_e) {}
+  }
+  return data
+}
+
+async function loadDictAssets() {
+  if (!currentDictDir) {
+    cssEditor.textContent = ''
+    jsEditor.textContent = ''
+    dictMetaCssRef = ''
+    dictMetaJsRef = ''
+    return
+  }
+
+  const dirName = getDictDirName()
+  const meta = await readDictMeta()
+  dictMetaCssRef = meta.css || ''
+  dictMetaJsRef = meta.js || ''
+
+  let cssContent = ''
+  let jsContent = ''
+
+  const cssPath = resolveAssetRef(dictMetaCssRef, `${dirName}.css`)
+  if (cssPath) {
+    try {
+      const content = await window.wikit.readTextFile(cssPath)
+      if (content) cssContent = content
+    } catch (_e) {}
+  } else if (dictMetaCssRef && !dictMetaCssRef.trim().startsWith('@')) {
+    cssContent = dictMetaCssRef
+  }
+
+  const jsPath = resolveAssetRef(dictMetaJsRef, `${dirName}.js`)
+  if (jsPath) {
+    try {
+      const content = await window.wikit.readTextFile(jsPath)
+      if (content) jsContent = content
+    } catch (_e) {}
+  } else if (dictMetaJsRef && !dictMetaJsRef.trim().startsWith('@')) {
+    jsContent = dictMetaJsRef
+  }
+
+  cssEditor.textContent = cssContent
+  jsEditor.textContent = jsContent
+}
+
+async function syncDictAssetsForBuild() {
+  const dirName = getDictDirName()
+  const cssContent = cssEditor.textContent || ''
+  const jsContent = jsEditor.textContent || ''
+  const cssFileName = `${dirName}.css`
+  const jsFileName = `${dirName}.js`
+  const cssPath = `${currentDictDir}/${cssFileName}`
+  const jsPath = `${currentDictDir}/${jsFileName}`
+
+  if (cssContent.trim()) {
+    const ok = await window.wikit.writeTextFile(cssPath, cssContent)
+    if (!ok) throw new Error('写入 CSS 文件失败')
+    dictMetaCssRef = `@${cssFileName}`
+  } else {
+    dictMetaCssRef = ''
+  }
+
+  if (jsContent.trim()) {
+    const ok = await window.wikit.writeTextFile(jsPath, jsContent)
+    if (!ok) throw new Error('写入 JS 文件失败')
+    dictMetaJsRef = `@${jsFileName}`
+  } else {
+    dictMetaJsRef = ''
+  }
+
+  const meta = await readDictMeta()
+  meta.css = dictMetaCssRef
+  meta.js = dictMetaJsRef
+  if (!meta.authors.length) meta.authors = ['']
+  if (!meta.distributors.length) meta.distributors = ['']
+  const ok = await window.wikit.writeTextFile(getDictTomlPath(), buildToml(meta))
+  if (!ok) throw new Error('写入词典元信息失败')
+}
+
+async function importDictAsset(kind) {
+  if (!currentDictDir) {
+    showSaveStatus('请先选择词典目录', 'error')
+    return
+  }
+  const filters = kind === 'css'
+    ? [
+        { name: 'CSS', extensions: ['css'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    : [
+        { name: 'JavaScript', extensions: ['js'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+  const filePath = await window.wikit.openFile(filters)
+  if (!filePath) return
+  try {
+    const content = await window.wikit.readTextFile(filePath)
+    if (content == null) {
+      showSaveStatus('读取文件失败', 'error')
+      return
+    }
+    if (kind === 'css') {
+      cssEditor.textContent = content
+    } else {
+      jsEditor.textContent = content
+    }
+    markModified()
+    schedulePreview()
+    const name = filePath.split(/[\\/]/).pop() || filePath
+    showSaveStatus(`已导入 ${name}，构建词典时会打入 .wikit`, 'success')
+  } catch (_e) {
+    showSaveStatus('读取文件失败', 'error')
+  }
+}
+
 function parseToml(text) {
   const result = {}
   if (!text || !text.trim()) return result
@@ -1059,23 +1930,9 @@ async function openMetaEditor() {
     showSaveStatus('请先选择词典目录', 'error')
     return
   }
-  const dirName = currentDictDir.split('/').pop() || currentDictDir
-  const tomlPath = `${currentDictDir}/${dirName}.toml`
-  let data = { name: dirName, version: '1.0', authors: [''], distributors: [''], description: '', homepage: '', css: '', js: '' }
-  try {
-    const content = await window.wikit.readTextFile(tomlPath)
-    if (content) {
-      const parsed = parseToml(content)
-      if (parsed.name) data.name = parsed.name
-      if (parsed.version) data.version = parsed.version
-      if (parsed.authors) data.authors = parsed.authors
-      if (parsed.distributors) data.distributors = parsed.distributors
-      if (parsed.description) data.description = parsed.description
-      if (parsed.homepage) data.homepage = parsed.homepage
-      if (parsed.css) data.css = parsed.css
-      if (parsed.js) data.js = parsed.js
-    }
-  } catch (_e) {}
+  const data = await readDictMeta()
+  dictMetaCssRef = data.css || ''
+  dictMetaJsRef = data.js || ''
   document.getElementById('metaName').value = data.name || ''
   document.getElementById('metaVersion').value = data.version || ''
   document.getElementById('metaAuthors').value = Array.isArray(data.authors) ? data.authors.join(', ') : (data.authors || '')
@@ -1092,8 +1949,7 @@ document.getElementById('metaEditCancel').addEventListener('click', () => {
 
 document.getElementById('metaEditSave').addEventListener('click', async () => {
   if (!currentDictDir) return
-  const dirName = currentDictDir.split('/').pop() || currentDictDir
-  const tomlPath = `${currentDictDir}/${dirName}.toml`
+  const existing = await readDictMeta()
   const data = {
     name: document.getElementById('metaName').value.trim(),
     version: document.getElementById('metaVersion').value.trim() || '1.0',
@@ -1101,12 +1957,14 @@ document.getElementById('metaEditSave').addEventListener('click', async () => {
     distributors: document.getElementById('metaDistributors').value.split(',').map(s => s.trim()).filter(Boolean),
     description: document.getElementById('metaDescription').value.trim(),
     homepage: document.getElementById('metaHomepage').value.trim(),
-    css: '',
-    js: '',
+    css: existing.css || dictMetaCssRef || '',
+    js: existing.js || dictMetaJsRef || '',
   }
   if (!data.authors.length) data.authors = ['']
   if (!data.distributors.length) data.distributors = ['']
-  const ok = await window.wikit.writeTextFile(tomlPath, buildToml(data))
+  dictMetaCssRef = data.css
+  dictMetaJsRef = data.js
+  const ok = await window.wikit.writeTextFile(getDictTomlPath(), buildToml(data))
   document.getElementById('metaEditOverlay').classList.add('is-hidden')
   showSaveStatus(ok ? '元信息已保存' : '保存失败', ok ? 'success' : 'error')
 })
@@ -1127,6 +1985,7 @@ async function loadEntries() {
       }
     }
   } catch (_e) {}
+  await loadDictAssets()
   renderEntriesList()
 }
 
@@ -1166,14 +2025,10 @@ function renderEntryEditor() {
   const entry = entries[currentEntry]
   if (!entry) {
     contentEditor.textContent = ''
-    cssEditor.textContent = ''
-    jsEditor.textContent = ''
     previewIframe.srcdoc = ''
     return
   }
   contentEditor.textContent = entry.content || ''
-  cssEditor.textContent = ''
-  jsEditor.textContent = ''
   renderPreview()
 }
 
@@ -1378,8 +2233,7 @@ async function buildDictionary() {
     showSaveStatus('请先选择词典目录', 'error')
     return
   }
-  const dirName = currentDictDir.split('/').pop() || currentDictDir
-  const tomlPath = `${currentDictDir}/${dirName}.toml`
+  const dirName = getDictDirName()
   const txtPath = `${currentDictDir}/entries.txt`
   const outPath = `${currentDictDir}/${dirName}.wikit`
   let txtExists
@@ -1388,30 +2242,32 @@ async function buildDictionary() {
     showSaveStatus('未找到 entries.txt', 'error')
     return
   }
-  let tomlExists
-  try { await window.wikit.readTextFile(tomlPath); tomlExists = true } catch (_e) { tomlExists = false }
-  if (!tomlExists) {
-    const defaultToml = buildToml({ name: dirName, version: '1.0', authors: [''], distributors: [''], description: '', homepage: '', css: '', js: '' })
-    await window.wikit.writeTextFile(tomlPath, defaultToml)
-  }
+
   const btn = document.getElementById('buildDictBtn')
   btn.disabled = true
   btn.textContent = '构建中...'
   showBuildProgress(0)
   let unlistenProgress = null
   try {
+    await syncDictAssetsForBuild()
+    const hasCss = !!(cssEditor.textContent || '').trim()
+    const hasJs = !!(jsEditor.textContent || '').trim()
     unlistenProgress = window.wikit.onBuildProgress((pct) => {
       showBuildProgress(pct * 100)
     })
     const result = await window.wikit.buildWikit(txtPath, outPath)
     if (result.ok) {
       showBuildProgress(100)
-      showSaveStatus('已构建: ' + dirName + '.wikit', 'success')
+      const packed = []
+      if (hasCss) packed.push('CSS')
+      if (hasJs) packed.push('JS')
+      const suffix = packed.length ? `（已包含 ${packed.join('/')}）` : ''
+      showSaveStatus('已构建: ' + dirName + '.wikit' + suffix, 'success')
     } else {
       showSaveStatus(result.error || '构建失败', 'error')
     }
-  } catch (_e) {
-    showSaveStatus('构建失败', 'error')
+  } catch (error) {
+    showSaveStatus('构建失败: ' + getErrorMessage(error), 'error')
   } finally {
     if (unlistenProgress) unlistenProgress()
     hideBuildProgress()
@@ -1637,8 +2493,23 @@ async function dePerformSearch() {
     for (const entry of entries) {
       const item = document.createElement('div')
       item.className = 'de-entry-item'
-      item.textContent = entry.word
-      item.addEventListener('click', () => deSelectEntry(entry.word, entry.definition))
+      const kindLabel = entry.kind === 'body' ? '（正文）' : ''
+      item.textContent = `${entry.word}${kindLabel}`
+      if (entry.snippet) {
+        item.title = entry.snippet
+      }
+      item.addEventListener('click', async () => {
+        let definition = entry.definition
+        if (!definition) {
+          try {
+            const resp = await window.wikit.lookup(deCurrentDictId, entry.word)
+            definition = resp?.words?.[entry.word] || Object.values(resp?.words || {})[0] || ''
+          } catch (_lookupError) {
+            definition = ''
+          }
+        }
+        deSelectEntry(entry.word, definition)
+      })
       deEntryList.appendChild(item)
     }
   } catch (_e) {
@@ -1689,8 +2560,8 @@ function deRenderViewer() {
   const css = deCssEditor.textContent || deDictMeta?.css || ''
   const js = deJsEditor.textContent || deDictMeta?.js || ''
   const chromeStyle = '<style>html{background:#fff;}body{margin:0;padding:16px 18px 32px;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;line-height:1.58;}body>*:first-child{margin-top:0;}a{color:#0969da;}.wikit-plain-preview{margin:0;white-space:pre-wrap;word-break:break-word;font:inherit;line-height:inherit;}</style>'
-  let doc = `<!DOCTYPE html><html><head><meta charset="UTF-8">${css ? '<style>' + css + '</style>' : ''}${chromeStyle}</head><body>${html}`
-  if (js) doc += `<script>${js}<\/script>`
+  let doc = `<!DOCTYPE html><html><head><meta charset="UTF-8">${chromeStyle}${css ? '<style>' + css.replace(/<\//g, '<\\/') + '</style>' : ''}</head><body>${html}`
+  if (js) doc += `<script>${js.replace(/<\//g, '<\\/')}<\/script>`
   doc += '</body></html>'
   deViewer.srcdoc = doc
 }
@@ -1719,8 +2590,6 @@ deForceFormatSelect.addEventListener('change', () => {
 })
 
 deHtmlEditor.addEventListener('input', () => deRenderViewer())
-deCssEditor.addEventListener('input', () => deRenderViewer())
-deJsEditor.addEventListener('input', () => deRenderViewer())
 
 deEditMetaBtn.addEventListener('click', () => {
   if (!deCurrentDictInfo) {
@@ -1729,9 +2598,10 @@ deEditMetaBtn.addEventListener('click', () => {
   }
   document.getElementById('deMetaName').value = deCurrentDictInfo.name || ''
   document.getElementById('deMetaDesc').value = deCurrentDictInfo.desc || ''
-  document.getElementById('deMetaCss').value = deCurrentDictInfo.style || ''
-  document.getElementById('deMetaJs').value = deCurrentDictInfo.script || ''
+  document.getElementById('deMetaCss').value = deCssEditor.textContent || deCurrentDictInfo.style || ''
+  document.getElementById('deMetaJs').value = deJsEditor.textContent || deCurrentDictInfo.script || ''
   document.getElementById('deMetaOverlay').classList.remove('is-hidden')
+  document.getElementById('deMetaName').focus()
 })
 
 function closeDeMetaOverlay() {
@@ -1741,8 +2611,123 @@ function closeDeMetaOverlay() {
 document.getElementById('deMetaClose').addEventListener('click', closeDeMetaOverlay)
 document.getElementById('deMetaCloseTop').addEventListener('click', closeDeMetaOverlay)
 
+async function refreshDictionaryAfterUpdate(dict) {
+  if (!dict || !dict.id) return
+
+  deCurrentDictId = dict.id
+  addDeDictOption(dict)
+  await loadDeDictList()
+  deDictSelect.value = dict.id
+
+  deCurrentDictInfo = await window.wikit.getDictInfo(dict.id)
+  deDictMeta = {
+    css: deCurrentDictInfo.style || '',
+    js: deCurrentDictInfo.script || ''
+  }
+  deCssEditor.textContent = deDictMeta.css
+  deJsEditor.textContent = deDictMeta.js
+  deRenderViewer()
+
+  const previousLookupId = dictSelect.value
+  await loadDictionaries()
+  const stillAvailable = Array.from(dictSelect.options).some((opt) => opt.value === dict.id)
+  if (stillAvailable) {
+    dictSelect.value = dict.id
+  } else if (previousLookupId) {
+    dictSelect.value = previousLookupId
+  }
+  if (dictSelect.value) {
+    lookupCurrentWord()
+  }
+}
+
+document.getElementById('deMetaSave').addEventListener('click', async () => {
+  if (!deCurrentDictId) {
+    deShowSaveStatus('请先选择词典', 'error')
+    return
+  }
+  const name = document.getElementById('deMetaName').value.trim()
+  const desc = document.getElementById('deMetaDesc').value.trim()
+  const style = document.getElementById('deMetaCss').value || ''
+  const script = document.getElementById('deMetaJs').value || ''
+  if (!name) {
+    deShowSaveStatus('词典名称不能为空', 'error')
+    return
+  }
+
+  const saveBtn = document.getElementById('deMetaSave')
+  saveBtn.disabled = true
+  deShowSaveStatus('正在保存元信息…', '')
+  try {
+    const dict = await window.wikit.republishLocalDict(
+      deCurrentDictId,
+      style,
+      script,
+      deCurrentDictId,
+      name,
+      desc
+    )
+    closeDeMetaOverlay()
+    await refreshDictionaryAfterUpdate(dict)
+    deShowSaveStatus('元信息已保存，词典已重新加载', 'success')
+  } catch (error) {
+    deShowSaveStatus('保存失败: ' + getErrorMessage(error), 'error')
+  } finally {
+    saveBtn.disabled = false
+  }
+})
+
 deSaveBtn.addEventListener('click', () => {
-  deShowSaveStatus('wikit/mdx 词典为只读格式，修改仅在本会话生效', 'error')
+  deShowSaveStatus('wikit/mdx 词典为只读格式，词条修改仅在本会话生效；样式请用「打包样式并导出」', 'error')
+})
+
+async function importDeAsset(kind) {
+  if (!deCurrentDictId) {
+    deShowSaveStatus('请先选择词典', 'error')
+    return
+  }
+  const filters = kind === 'css'
+    ? [
+        { name: 'CSS', extensions: ['css'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    : [
+        { name: 'JavaScript', extensions: ['js'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+  const filePath = await window.wikit.openFile(filters)
+  if (!filePath) return
+  try {
+    const content = await window.wikit.readTextFile(filePath)
+    if (content == null) {
+      deShowSaveStatus('读取文件失败', 'error')
+      return
+    }
+    if (kind === 'css') {
+      deCssEditor.textContent = content
+      if (deDictMeta) deDictMeta.css = content
+    } else {
+      deJsEditor.textContent = content
+      if (deDictMeta) deDictMeta.js = content
+    }
+    deRenderViewer()
+    const name = filePath.split(/[\\/]/).pop() || filePath
+    deShowSaveStatus(`已导入 ${name}，点击「打包样式并导出」写入 .wikit`, 'success')
+  } catch (_e) {
+    deShowSaveStatus('读取文件失败', 'error')
+  }
+}
+
+document.getElementById('deImportCssBtn').addEventListener('click', () => importDeAsset('css'))
+document.getElementById('deImportJsBtn').addEventListener('click', () => importDeAsset('js'))
+
+deCssEditor.addEventListener('input', () => {
+  if (deDictMeta) deDictMeta.css = deCssEditor.textContent || ''
+  deRenderViewer()
+})
+deJsEditor.addEventListener('input', () => {
+  if (deDictMeta) deDictMeta.js = deJsEditor.textContent || ''
+  deRenderViewer()
 })
 
 deExportBtn.addEventListener('click', async () => {
@@ -1754,11 +2739,29 @@ deExportBtn.addEventListener('click', async () => {
   if (!dir) return
   const dictName = deCurrentDictInfo ? deCurrentDictInfo.name : deCurrentDictId.split('/').pop() || 'dict'
   const outPath = `${dir}/${dictName}.wikit`
+  const style = deCssEditor.textContent || ''
+  const script = deJsEditor.textContent || ''
+  deExportBtn.disabled = true
+  deShowSaveStatus('正在打包样式…', '')
   try {
-    const ok = await window.wikit.copyFile(deCurrentDictId, outPath)
-    deShowSaveStatus(ok ? '已导出: ' + dictName + '.wikit' : '导出失败', ok ? 'success' : 'error')
-  } catch (_e) {
-    deShowSaveStatus('导出失败', 'error')
+    const dict = await window.wikit.republishLocalDict(
+      deCurrentDictId,
+      style,
+      script,
+      outPath,
+      deCurrentDictInfo ? deCurrentDictInfo.name : null,
+      deCurrentDictInfo ? deCurrentDictInfo.desc : null
+    )
+    await refreshDictionaryAfterUpdate(dict)
+    const packed = []
+    if (style.trim()) packed.push('CSS')
+    if (script.trim()) packed.push('JS')
+    const suffix = packed.length ? `（已包含 ${packed.join('/')}）` : ''
+    deShowSaveStatus('已导出并重新加载: ' + dictName + '.wikit' + suffix, 'success')
+  } catch (error) {
+    deShowSaveStatus('导出失败: ' + getErrorMessage(error), 'error')
+  } finally {
+    deExportBtn.disabled = false
   }
 })
 

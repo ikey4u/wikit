@@ -1,20 +1,20 @@
-use wikit_core::mdict;
-use wikit_core::router;
-use wikit_core::mac;
-use wikit_core::reader;
-use wikit_core::util;
 use wikit_core::elog;
-use wikit_core::wikit;
-use wikit_core::preview;
 use wikit_core::error::{AnyResult, Context};
+use wikit_core::mac;
+use wikit_core::mdict;
+use wikit_core::preview;
+use wikit_core::reader;
+use wikit_core::router;
+use wikit_core::util;
+use wikit_core::wikit;
 
-use std::path::Path;
 use std::ffi::OsStr;
 use std::fs::File;
+use std::path::Path;
 
-use clap::{Arg, App, SubCommand, AppSettings, value_t_or_exit};
-use serde::Deserialize;
+use clap::{value_t_or_exit, App, AppSettings, Arg, SubCommand};
 use indoc::indoc;
+use serde::Deserialize;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -37,9 +37,7 @@ impl MDXMeta {
         let indent = "    ";
         return format!(
             "(\n{}title: \"{}\",\n{}author: \"{}\",\n{}description: \"{}\",\n)",
-            indent, &self.title,
-            indent, &self.author,
-            indent, &self.description
+            indent, &self.title, indent, &self.author, indent, &self.description
         );
     }
 }
@@ -65,7 +63,7 @@ impl ResourceFormat {
                 Some("wikit") | Some("WIKIT") => Some(ResourceFormat::WIKIT),
                 Some("sqlite") => Some(ResourceFormat::SQLITE),
                 Some("dictionary") => Some(ResourceFormat::MACDICT),
-                _ => None
+                _ => None,
             }
         }
     }
@@ -77,8 +75,9 @@ async fn main() -> AnyResult<()> {
         .event_format(
             tracing_subscriber::fmt::format()
                 .with_file(true)
-                .with_line_number(true)
-        ).init();
+                .with_line_number(true),
+        )
+        .init();
 
     let matches = App::new("wikit")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -152,19 +151,21 @@ async fn main() -> AnyResult<()> {
 
     if let Some(dict) = matches.subcommand_matches("dict") {
         let input = value_t_or_exit!(dict.value_of("input"), String);
-        let itype  = ResourceFormat::new(&input).ok_or(elog!("Failed to get input resource format"))?;
+        let itype =
+            ResourceFormat::new(&input).ok_or(elog!("Failed to get input resource format"))?;
         if dict.is_present("info") {
             match itype {
                 ResourceFormat::MDX => {
                     mdict::parse_mdx(&input, Some(mdict::ParseOption::OnlyHeader))?;
-                },
+                }
                 _ => {
                     println!("Dump information for this dictionary type is not supported now")
                 }
             }
         } else {
             let output = value_t_or_exit!(dict.value_of("output"), String);
-            let otype = ResourceFormat::new(&output).ok_or(elog!("Failed to get output resource format"))?;
+            let otype = ResourceFormat::new(&output)
+                .ok_or(elog!("Failed to get output resource format"))?;
             let css = if let Some(css) = dict.value_of("css") {
                 Some(css.to_string())
             } else {
@@ -179,19 +180,20 @@ async fn main() -> AnyResult<()> {
                         // TODO(2021-11-27): read from toml configuration
                         let title = "wikit dictionary";
                         let author = "anonymous";
-                        let description = "This dictionary is created by wikit (https://github.com/ikey4u/wikit)";
+                        let description =
+                            "This dictionary is created by wikit (https://github.com/ikey4u/wikit)";
                         mdict::create_mdx(title, author, description, &input, &output)?;
-                    },
+                    }
                     (ResourceFormat::MDX, ResourceFormat::TEXT) => {
                         let dict = mdict::parse_mdx(input.as_str(), None)?;
                         mdict::write_into_text(&dict, &output)?;
-                    },
+                    }
                     (ResourceFormat::TEXT, ResourceFormat::MACDICT) => {
                         let file = File::open(&input).context(elog!("Cannot open {:?}", &input))?;
                         let mdxsrc = reader::MDXSource::new(file);
                         mac::create_mac_dictionary(mdxsrc, input, output, css)
                             .context(elog!("Failed to create mac dictionary"))?;
-                    },
+                    }
                     (ResourceFormat::MDX, ResourceFormat::MACDICT) => {
                         let textpath = pdir.join(stem + "_wikit.txt");
                         if !textpath.exists() {
@@ -210,13 +212,16 @@ async fn main() -> AnyResult<()> {
                             .context(elog!("Failed to create mac dictionary"))?;
                         println!("[+] Create mac dictionary is done");
                         if textpath.exists() {
-                            std::fs::remove_file(textpath.as_path()).context(
-                                elog!("cannot remove file {}, you may remove it manually", textpath.display())
-                            )?;
+                            std::fs::remove_file(textpath.as_path()).context(elog!(
+                                "cannot remove file {}, you may remove it manually",
+                                textpath.display()
+                            ))?;
                         }
-                    },
+                    }
                     (ResourceFormat::MDX, ResourceFormat::POSTGRES) => {
-                        let table = dict.value_of("table").expect("Please specify database table name");
+                        let table = dict
+                            .value_of("table")
+                            .expect("Please specify database table name");
                         let pairs = mdict::parse_mdx(input.as_str(), None)?;
                         mdict::save_into_db(pairs.entries, &output, table).await?;
                     }
@@ -232,7 +237,8 @@ async fn main() -> AnyResult<()> {
                                 [],
                             )?;
 
-                            let file = File::open(Path::new(&input)).context(elog!("Cannot open {:?}", input))?;
+                            let file = File::open(Path::new(&input))
+                                .context(elog!("Cannot open {:?}", input))?;
                             let wikitsrc = reader::WikitSource::new(file);
 
                             for item in wikitsrc {
@@ -252,15 +258,18 @@ async fn main() -> AnyResult<()> {
                         let outfile = wikit::LocalDictionary::create(&input, Some(outfile))
                             .context(elog!("failed to create wikit dictionary"))?;
                         println!("The wikit dictionary can be found at {}", outfile.display());
-                    },
+                    }
                     (i, o) => {
-                        return Err(elog!("Does not support creating {:?} from {:?} for now", o, i));
-                    },
+                        return Err(elog!(
+                            "Does not support creating {:?} from {:?} for now",
+                            o,
+                            i
+                        ));
+                    }
                 }
             } else {
                 println!("No valid flags are provided, usage: {}", matches.usage());
             }
-
         }
     }
 

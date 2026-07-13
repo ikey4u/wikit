@@ -1,9 +1,9 @@
 use crate::config::MAX_MDX_ITEM_SIZE;
-use crate::util;
 use crate::error::Result;
+use crate::util;
 
-use std::io::{BufReader, BufRead, Lines};
 use std::fs::File;
+use std::io::{BufRead, BufReader, Lines};
 
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,9 @@ pub struct MDXSource {
 impl MDXSource {
     pub fn new(f: File) -> Self {
         let reader = BufReader::new(f);
-        MDXSource { iter: reader.lines() }
+        MDXSource {
+            iter: reader.lines(),
+        }
     }
 }
 
@@ -34,21 +36,27 @@ impl Iterator for MDXSource {
                         } else {
                             meaning.push_str(line.as_str().trim());
                         }
-                    },
-                    Err(_) => return None
+                    }
+                    Err(_) => return None,
                 },
-                None => return None
+                None => return None,
             }
         }
         let mut word = if word.len() > MAX_MDX_ITEM_SIZE {
-            println!("[!] Lenght of word exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
+            println!(
+                "[!] Lenght of word exceeds {}, truncated!",
+                MAX_MDX_ITEM_SIZE
+            );
             word[..MAX_MDX_ITEM_SIZE].to_string()
         } else {
             word
         };
         word.push(0 as char);
         let mut meaning = if meaning.len() > MAX_MDX_ITEM_SIZE {
-            println!("[!] Lenght of meaning exceeds {}, truncated!", MAX_MDX_ITEM_SIZE);
+            println!(
+                "[!] Lenght of meaning exceeds {}, truncated!",
+                MAX_MDX_ITEM_SIZE
+            );
             meaning[..MAX_MDX_ITEM_SIZE].to_string()
         } else {
             meaning
@@ -116,7 +124,10 @@ impl Iterator for WikitSource {
                     }
                     Status::ReadingHeader => {
                         // body start flag: start with `)`, following with zero or more space, end with `{`
-                        if line.starts_with(")") && line.ends_with("{") && line.replace(" ", "").trim() == "){" {
+                        if line.starts_with(")")
+                            && line.ends_with("{")
+                            && line.replace(" ", "").trim() == "){"
+                        {
                             status = Status::ReadingBody;
                             continue;
                         }
@@ -138,7 +149,10 @@ impl Iterator for WikitSource {
                                 &line[..]
                             }
                         } else {
-                            println!("line {}: 0 or more than 4 spaces indent are expected", self.lineno);
+                            println!(
+                                "line {}: 0 or more than 4 spaces indent are expected",
+                                self.lineno
+                            );
                             return None;
                         };
                         if status == Status::ReadingHeader {
@@ -160,7 +174,10 @@ impl Iterator for WikitSource {
             let hdrstr = format!("{{ {hdrstr} }}");
             match json5::from_str::<WikitSourceItemHeader>(hdrstr.as_str()) {
                 Ok(header) => {
-                    return Some(WikitSourceItem { header, body: bodystr });
+                    return Some(WikitSourceItem {
+                        header,
+                        body: bodystr,
+                    });
                 }
                 Err(e) => {
                     println!("failed to parse header from line {} to {}, content:\n{}\n, with error:\n{}", item_start_lineno, self.lineno, hdrstr, e);

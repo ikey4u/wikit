@@ -1,13 +1,12 @@
 /// This module is used to build index for dictionary
-
-use crate::error::{WikitResult};
+use crate::error::WikitResult;
 
 use std::collections::HashSet;
-use std::io::{SeekFrom};
 use std::fs::File;
+use std::io::SeekFrom;
 
 use fst::automaton::Levenshtein;
-use fst::{IntoStreamer, Streamer, Map, MapBuilder};
+use fst::{IntoStreamer, Map, MapBuilder, Streamer};
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
 
@@ -36,10 +35,13 @@ pub struct FSTIndex {
 impl FSTIndex {
     /// Create index from iterator of `(keyword, offset) of type (&str, u64)`,
     /// the keyword must be lexicographically ordered and has no duplications.
-    pub fn write<S, W>(iter: &mut dyn Iterator<Item = &(S, u64)>, writer: &mut W) -> WikitResult<(u64, u64)>
-        where
-            S: AsRef<str>,
-            W: std::io::Write + std::io::Seek,
+    pub fn write<S, W>(
+        iter: &mut dyn Iterator<Item = &(S, u64)>,
+        writer: &mut W,
+    ) -> WikitResult<(u64, u64)>
+    where
+        S: AsRef<str>,
+        W: std::io::Write + std::io::Seek,
     {
         let start = writer.seek(SeekFrom::Current(0))?;
         let mut fst_builder = MapBuilder::new(writer)?;
@@ -55,9 +57,17 @@ impl FSTIndex {
         IndexFormat::FST
     }
 
-    pub fn lookup<P>(&self, keyword: P) -> WikitResult<Vec<(String, u64)>> where P: AsRef<str> {
+    pub fn lookup<P>(&self, keyword: P) -> WikitResult<Vec<(String, u64)>>
+    where
+        P: AsRef<str>,
+    {
         let file = File::open(&self.path)?;
-        let mmap = unsafe { MmapOptions::new().offset(self.offset).len(self.length as usize).map(&file)? };
+        let mmap = unsafe {
+            MmapOptions::new()
+                .offset(self.offset)
+                .len(self.length as usize)
+                .map(&file)?
+        };
         let map = Map::new(mmap)?;
 
         let fuzzycnt = match keyword.as_ref().len() {

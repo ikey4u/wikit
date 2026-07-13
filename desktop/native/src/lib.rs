@@ -6,34 +6,35 @@ use async_openai::types::chat::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
     CreateChatCompletionRequestArgs,
 };
-use serde_json::{json, Value};
 use async_openai::Client;
+use chrono::Utc;
 use napi::{Error, Result as NapiResult};
+use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::SyncSender;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use chrono::Utc;
-use wikit_core::{config, crypto, preview, util, wikit};
 use wikit_core::wikit::WikitDictionary;
+use wikit_core::{config, crypto, preview, util, wikit};
 
-static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> = Lazy::new(|| {
-    Arc::new(Mutex::new(HashMap::new()))
-});
+static DICTDB: Lazy<Arc<Mutex<HashMap<String, WikitDictionary>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 static INTERNAL_FS_PORT: AtomicU16 = AtomicU16::new(7561);
 static STATIC_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 static STATIC_SERVER_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 static PREVIEW_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 static PREVIEW_SERVER_PORT: AtomicU16 = AtomicU16::new(0);
-static PREVIEW_SHUTDOWN: Lazy<Mutex<Option<tokio::sync::broadcast::Sender<()>>>> = Lazy::new(|| Mutex::new(None));
+static PREVIEW_SHUTDOWN: Lazy<Mutex<Option<tokio::sync::broadcast::Sender<()>>>> =
+    Lazy::new(|| Mutex::new(None));
 static NATIVE_LOG_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
 
 fn native_log(level: &str, module: &str, message: impl AsRef<str>) {
@@ -47,11 +48,7 @@ fn native_log(level: &str, module: &str, message: impl AsRef<str>) {
     let Some(path) = guard.as_ref() else {
         return;
     };
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-    {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
         let _ = file.write_all(line.as_bytes());
     }
 }
@@ -63,7 +60,8 @@ pub fn init_native_logger(log_file_path: String) -> NapiResult<()> {
         return Err(Error::from_reason("native log file path is empty"));
     }
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| napi_error("failed to create native log directory", e))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| napi_error("failed to create native log directory", e))?;
     }
     {
         let mut guard = NATIVE_LOG_PATH
@@ -71,7 +69,11 @@ pub fn init_native_logger(log_file_path: String) -> NapiResult<()> {
             .map_err(|e| Error::from_reason(format!("failed to lock native logger state: {e}")))?;
         *guard = Some(path.clone());
     }
-    native_log("INFO", "logger", format!("initialized at {}", path.display()));
+    native_log(
+        "INFO",
+        "logger",
+        format!("initialized at {}", path.display()),
+    );
     Ok(())
 }
 
@@ -86,6 +88,13 @@ pub struct LookupResponse {
     pub words: HashMap<String, String>,
     pub script: String,
     pub style: String,
+}
+
+#[napi(object)]
+pub struct ResourceLookupResponse {
+    pub found: bool,
+    pub mime: String,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,11 +146,16 @@ fn napi_error<E: std::fmt::Debug>(context: &str, error: E) -> Error {
 }
 
 fn lock_dictdb() -> NapiResult<std::sync::MutexGuard<'static, HashMap<String, WikitDictionary>>> {
-    DICTDB.lock().map_err(|e| Error::from_reason(format!("failed to lock dictionary database: {e}")))
+    DICTDB
+        .lock()
+        .map_err(|e| Error::from_reason(format!("failed to lock dictionary database: {e}")))
 }
 
-fn lock_preview_shutdown() -> NapiResult<std::sync::MutexGuard<'static, Option<tokio::sync::broadcast::Sender<()>>>> {
-    PREVIEW_SHUTDOWN.lock().map_err(|e| Error::from_reason(format!("failed to lock preview server state: {e}")))
+fn lock_preview_shutdown(
+) -> NapiResult<std::sync::MutexGuard<'static, Option<tokio::sync::broadcast::Sender<()>>>> {
+    PREVIEW_SHUTDOWN
+        .lock()
+        .map_err(|e| Error::from_reason(format!("failed to lock preview server state: {e}")))
 }
 
 fn translation_config_path() -> AnyResult<PathBuf> {
@@ -204,7 +218,9 @@ fn load_translation_settings_inner() -> AnyResult<TranslationSettings> {
     Ok(sanitize_translation_settings(toml::from_str(&content)?))
 }
 
-fn save_translation_settings_inner(settings: TranslationSettings) -> AnyResult<TranslationSettings> {
+fn save_translation_settings_inner(
+    settings: TranslationSettings,
+) -> AnyResult<TranslationSettings> {
     let settings = sanitize_translation_settings(settings);
     let path = translation_config_path()?;
     let content = toml::to_string_pretty(&settings)?;
@@ -242,7 +258,10 @@ fn language_name(code: &str) -> &str {
     }
 }
 
-async fn translate_with_settings(settings: TranslationSettings, request: TranslationRequest) -> AnyResult<TranslationResponse> {
+async fn translate_with_settings(
+    settings: TranslationSettings,
+    request: TranslationRequest,
+) -> AnyResult<TranslationResponse> {
     let text = request.text.trim();
     if text.is_empty() {
         return Err(anyhow!("translation input is empty"));
@@ -349,7 +368,11 @@ fn try_bind_static_port(port: u16) -> Option<TcpListener> {
 fn bind_static_server_port() -> NapiResult<(u16, TcpListener)> {
     let preferred = INTERNAL_FS_PORT.load(Ordering::SeqCst);
     if let Some(listener) = try_bind_static_port(preferred) {
-        native_log("INFO", "static-server", format!("using preferred port {preferred}"));
+        native_log(
+            "INFO",
+            "static-server",
+            format!("using preferred port {preferred}"),
+        );
         return Ok((preferred, listener));
     }
 
@@ -379,12 +402,14 @@ fn run_static_file_server(listener: TcpListener, ready_tx: SyncSender<()>) -> An
     rt.block_on(async move {
         let app = Router::new().nest(
             "/static",
-            get_service(ServeDir::new(config::get_static_dir()?)).handle_error(|error: std::io::Error| async move {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {error}"),
-                )
-            }),
+            get_service(ServeDir::new(config::get_static_dir()?)).handle_error(
+                |error: std::io::Error| async move {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Unhandled internal error: {error}"),
+                    )
+                },
+            ),
         );
         let server = axum::Server::from_tcp(listener)?;
         ready_tx
@@ -402,14 +427,22 @@ fn ensure_static_file_server() -> NapiResult<u16> {
 
     if STATIC_SERVER_STARTED.load(Ordering::SeqCst) {
         let port = INTERNAL_FS_PORT.load(Ordering::SeqCst);
-        native_log("INFO", "static-server", format!("already running on port {port}"));
+        native_log(
+            "INFO",
+            "static-server",
+            format!("already running on port {port}"),
+        );
         return Ok(port);
     }
 
     let (port, listener) = bind_static_server_port()?;
     INTERNAL_FS_PORT.store(port, Ordering::SeqCst);
     STATIC_SERVER_STARTED.store(true, Ordering::SeqCst);
-    native_log("INFO", "static-server", format!("starting background thread on port {port}"));
+    native_log(
+        "INFO",
+        "static-server",
+        format!("starting background thread on port {port}"),
+    );
 
     let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {
@@ -434,17 +467,22 @@ fn ensure_static_file_server() -> NapiResult<u16> {
     }
 }
 
-fn write_file_once(content: &[u8], file: &Path) -> NapiResult<()> {
-    if !file.exists() {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(file)
-            .map_err(|e| napi_error("failed to open static resource", e))?;
-        file.write_all(content)
-            .map_err(|e| napi_error("failed to write static resource", e))?;
+fn write_static_file(content: &[u8], file: &Path) -> NapiResult<()> {
+    if file.exists() {
+        if let Ok(existing) = fs::read(file) {
+            if existing == content {
+                return Ok(());
+            }
+        }
     }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(file)
+        .map_err(|e| napi_error("failed to open static resource", e))?;
+    file.write_all(content)
+        .map_err(|e| napi_error("failed to write static resource", e))?;
     Ok(())
 }
 
@@ -458,11 +496,16 @@ pub fn get_dict_list() -> NapiResult<Vec<DictMeta>> {
     let mut dictlist = Vec::new();
     let mut dictdb = lock_dictdb()?;
     dictdb.clear();
+    let mut seen_names = HashSet::new();
 
     if let Ok(dicts) = wikit::load_client_dictionary() {
-        for dict in dicts {
+        // Prefer later registrations when names collide.
+        for dict in dicts.into_iter().rev() {
             match &dict {
                 WikitDictionary::Local(ld) => {
+                    if !seen_names.insert(ld.head.name.clone()) {
+                        continue;
+                    }
                     let id = ld.path.display().to_string();
                     dictlist.push(DictMeta {
                         name: ld.head.name.clone(),
@@ -472,7 +515,10 @@ pub fn get_dict_list() -> NapiResult<Vec<DictMeta>> {
                 }
                 WikitDictionary::Remote(rd) => {
                     if let Ok(metas) = rd.get_dict_list() {
-                        for meta in metas {
+                        for meta in metas.into_iter().rev() {
+                            if !seen_names.insert(meta.name.clone()) {
+                                continue;
+                            }
                             dictdb.insert(meta.id.clone(), dict.clone());
                             dictlist.push(DictMeta {
                                 name: meta.name,
@@ -483,56 +529,219 @@ pub fn get_dict_list() -> NapiResult<Vec<DictMeta>> {
                 }
             }
         }
+        dictlist.reverse();
     }
 
     Ok(dictlist)
 }
 
 #[napi]
-pub fn load_local_dictionary(path: String) -> NapiResult<DictMeta> {
-    let source_path = PathBuf::from(&path);
-    if !source_path.exists() {
-        return Err(Error::from_reason(format!("dictionary file not found: {path}")));
+pub fn remove_local_dictionary(dictid: String) -> NapiResult<bool> {
+    let removed = wikit::unregister_local_dictionary(&dictid)
+        .map_err(|e| napi_error("failed to remove dictionary from config", e))?;
+    let mut dictdb = lock_dictdb()?;
+    dictdb.remove(&dictid);
+    Ok(removed)
+}
+
+#[napi]
+pub async fn load_local_dictionary(
+    path: String,
+    progress_callback: ThreadsafeFunction<f64>,
+) -> NapiResult<DictMeta> {
+    tokio::task::spawn_blocking(move || -> NapiResult<DictMeta> {
+        let mut report = |value: f64| {
+            progress_callback.call(
+                Ok(value.clamp(0.0, 1.0)),
+                ThreadsafeFunctionCallMode::NonBlocking,
+            );
+        };
+        report(0.0);
+
+        let source_path = PathBuf::from(&path);
+        if !source_path.exists() {
+            return Err(Error::from_reason(format!(
+                "dictionary file not found: {path}"
+            )));
+        }
+
+        let suffix = source_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        let wikit_path = match suffix.as_str() {
+            "wikit" => {
+                report(0.6);
+                source_path.clone()
+            }
+            "mdx" => {
+                let cache_dir = config::get_config_dir()
+                    .map_err(|e| napi_error("failed to get config directory", e))?
+                    .join("local-dictionaries");
+                fs::create_dir_all(&cache_dir)
+                    .map_err(|e| napi_error("failed to create local dictionary cache", e))?;
+                let stem = source_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("dictionary");
+                let hash = crypto::md5(path.as_bytes());
+                let out_path = cache_dir.join(format!("{stem}-{hash}.wikit"));
+                wikit::LocalDictionary::create_with_progress(
+                    &source_path,
+                    Some(&out_path),
+                    &mut report,
+                )
+                .map_err(|e| napi_error("failed to convert mdx dictionary", e))?
+            }
+            _ => {
+                return Err(Error::from_reason(format!(
+                    "unsupported dictionary type: {suffix}"
+                )));
+            }
+        };
+
+        report(0.97);
+        let local = wikit::LocalDictionary::load(&wikit_path)
+            .map_err(|e| napi_error("failed to load local dictionary", e))?;
+        let id = local.path.display().to_string();
+        let name = local.head.name.clone();
+        wikit::register_local_dictionary(&wikit_path)
+            .map_err(|e| napi_error("failed to register dictionary in config", e))?;
+
+        let mut dictdb = lock_dictdb()?;
+        dictdb.insert(id.clone(), WikitDictionary::Local(local));
+        report(1.0);
+        Ok(DictMeta { name, id })
+    })
+    .await
+    .map_err(|e| napi_error("failed to join dictionary load task", e))?
+}
+
+fn escape_inline_asset(content: &str) -> String {
+    content.replace("</", "<\\/")
+}
+
+fn read_nonempty_text_file(path: &Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    if content.trim().is_empty() {
+        None
+    } else {
+        Some(content)
+    }
+}
+
+fn push_unique_filename(files: &mut Vec<String>, raw: &str) {
+    let name = raw
+        .trim()
+        .trim_start_matches(|c| c == '/' || c == '\\')
+        .replace('\\', "/");
+    let name = name
+        .rsplit('/')
+        .next()
+        .unwrap_or(name.as_str())
+        .trim()
+        .to_string();
+    if name.is_empty() {
+        return;
+    }
+    if !files
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(&name))
+    {
+        files.push(name);
+    }
+}
+
+fn collect_linked_asset_names(html: &str) -> (Vec<String>, Vec<String>) {
+    let mut css_files = Vec::new();
+    let mut js_files = Vec::new();
+    let lower = html.to_ascii_lowercase();
+
+    let mut search_from = 0;
+    while let Some(rel) = lower[search_from..].find(".css") {
+        let end = search_from + rel + 4;
+        let start_window = search_from.saturating_sub(160);
+        let window = &html[start_window..end];
+        if let Some(q) = window.rfind(['\'', '"']) {
+            let raw = &window[q + 1..];
+            if raw.to_ascii_lowercase().ends_with(".css") {
+                push_unique_filename(&mut css_files, raw);
+            }
+        }
+        search_from = end;
     }
 
-    let suffix = source_path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("")
-        .to_lowercase();
+    search_from = 0;
+    while let Some(rel) = lower[search_from..].find(".js") {
+        let end = search_from + rel + 3;
+        // Avoid matching things like ".json"
+        if html
+            .get(end..end + 1)
+            .map(|c| {
+                c.chars()
+                    .next()
+                    .map(|ch| ch.is_ascii_alphanumeric())
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false)
+        {
+            search_from = end;
+            continue;
+        }
+        let start_window = search_from.saturating_sub(160);
+        let window = &html[start_window..end];
+        if let Some(q) = window.rfind(['\'', '"']) {
+            let raw = &window[q + 1..];
+            if raw.to_ascii_lowercase().ends_with(".js") {
+                push_unique_filename(&mut js_files, raw);
+            }
+        }
+        search_from = end;
+    }
 
-    let wikit_path = match suffix.as_str() {
-        "wikit" => source_path.clone(),
-        "mdx" => {
-            let cache_dir = config::get_config_dir()
-                .map_err(|e| napi_error("failed to get config directory", e))?
-                .join("local-dictionaries");
-            fs::create_dir_all(&cache_dir)
-                .map_err(|e| napi_error("failed to create local dictionary cache", e))?;
-            let stem = source_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("dictionary");
-            let hash = crypto::md5(path.as_bytes());
-            let out_path = cache_dir.join(format!("{stem}-{hash}.wikit"));
-            wikit::LocalDictionary::create(&source_path, Some(&out_path))
-                .map_err(|e| napi_error("failed to convert mdx dictionary", e))?
-        }
-        _ => {
-            return Err(Error::from_reason(format!("unsupported dictionary type: {suffix}")));
-        }
+    (css_files, js_files)
+}
+
+fn recover_assets_from_siblings(
+    dict_path: &Path,
+    sample_html: &str,
+    style: &mut String,
+    script: &mut String,
+) {
+    let Some(dir) = dict_path.parent() else {
+        return;
     };
+    let (mut css_files, mut js_files) = collect_linked_asset_names(sample_html);
+    if let Some(stem) = dict_path.file_stem().and_then(|s| s.to_str()) {
+        push_unique_filename(&mut css_files, &format!("{stem}.css"));
+        push_unique_filename(&mut js_files, &format!("{stem}.js"));
+    }
 
-    let local = wikit::LocalDictionary::load(&wikit_path)
-        .map_err(|e| napi_error("failed to load local dictionary", e))?;
-    let id = local.path.display().to_string();
-    let name = local.head.name.clone();
-    config::register_client_dictionary_uri(&wikit_path)
-        .map_err(|e| napi_error("failed to register dictionary in config", e))?;
+    if style.trim().is_empty() {
+        for name in &css_files {
+            if let Some(content) = read_nonempty_text_file(&dir.join(name)) {
+                *style = content;
+                break;
+            }
+        }
+    }
+    if script.trim().is_empty() {
+        for name in &js_files {
+            if let Some(content) = read_nonempty_text_file(&dir.join(name)) {
+                *script = content;
+                break;
+            }
+        }
+    }
+}
 
-    let mut dictdb = lock_dictdb()?;
-    dictdb.insert(id.clone(), WikitDictionary::Local(local));
-    Ok(DictMeta { name, id })
+fn write_static_file_nonempty(content: &[u8], file: &Path) -> NapiResult<()> {
+    if content.iter().all(|b| b.is_ascii_whitespace()) {
+        return Ok(());
+    }
+    write_static_file(content, file)
 }
 
 #[napi]
@@ -565,22 +774,160 @@ pub fn lookup(dictid: String, word: String) -> NapiResult<LookupResponse> {
         }
     }
 
-    let staticdir = config::get_static_dir().map_err(|e| napi_error("failed to get static directory", e))?;
+    let staticdir =
+        config::get_static_dir().map_err(|e| napi_error("failed to get static directory", e))?;
     let staticid = crypto::md5(dictid.as_bytes());
     let cssfile = staticdir.join(format!("{staticid}.css"));
     let jsfile = staticdir.join(format!("{staticid}.js"));
-    write_file_once(style.as_bytes(), cssfile.as_path())?;
-    write_file_once(script.as_bytes(), jsfile.as_path())?;
-    if let Some(meaning) = words.get(&word) {
-        let wordfile = staticdir.join(format!("{staticid}_{word}.html"));
-        write_file_once(meaning.as_bytes(), wordfile.as_path())?;
+
+    // Prefer dictionary header assets; if missing, recover from sibling files / cache.
+    if style.trim().is_empty() || script.trim().is_empty() {
+        let sample_html = words
+            .values()
+            .find(|html| {
+                html.contains(".css") || html.contains(".js") || html.contains("stylesheet")
+            })
+            .cloned()
+            .or_else(|| words.values().next().cloned())
+            .unwrap_or_default();
+        recover_assets_from_siblings(Path::new(&dictid), &sample_html, &mut style, &mut script);
+    }
+    if style.trim().is_empty() {
+        if let Some(cached) = read_nonempty_text_file(&cssfile) {
+            style = cached;
+        }
+    }
+    if script.trim().is_empty() {
+        if let Some(cached) = read_nonempty_text_file(&jsfile) {
+            script = cached;
+        }
     }
 
-    let port = ensure_static_file_server()?;
-    let style = format!(r#" <link rel="stylesheet" href="http://127.0.0.1:{port}/static/{staticid}.css"> "#);
-    let script = format!(r#" <script type="text/javascript" src="http://127.0.0.1:{port}/static/{staticid}.js"></script> "#);
+    write_static_file_nonempty(style.as_bytes(), cssfile.as_path())?;
+    write_static_file_nonempty(script.as_bytes(), jsfile.as_path())?;
+    if let Some(meaning) = words.get(&word) {
+        let wordfile = staticdir.join(format!("{staticid}_{word}.html"));
+        write_static_file(meaning.as_bytes(), wordfile.as_path())?;
+    }
 
-    Ok(LookupResponse { words, script, style })
+    // Inline assets for srcdoc iframes: external <link>/<script src> are unreliable there.
+    let style_tag = if style.trim().is_empty() {
+        String::new()
+    } else {
+        format!("<style>{}</style>", escape_inline_asset(&style))
+    };
+    let script_tag = if script.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"<script type="text/javascript">{}</script>"#,
+            escape_inline_asset(&script)
+        )
+    };
+
+    Ok(LookupResponse {
+        words,
+        script: script_tag,
+        style: style_tag,
+    })
+}
+
+fn resource_mime(typ: wikit::DataEntryType, key: &str) -> &'static str {
+    use wikit::DataEntryType::*;
+    match typ {
+        MP3 => "audio/mpeg",
+        WAV => "audio/wav",
+        MP4 => "video/mp4",
+        PNG => "image/png",
+        JPG => "image/jpeg",
+        SVG => "image/svg+xml",
+        BIN | TXT => {
+            let lower = key.to_ascii_lowercase();
+            if lower.ends_with(".mp3") {
+                "audio/mpeg"
+            } else if lower.ends_with(".wav") {
+                "audio/wav"
+            } else if lower.ends_with(".png") {
+                "image/png"
+            } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+                "image/jpeg"
+            } else if lower.ends_with(".svg") {
+                "image/svg+xml"
+            } else if lower.ends_with(".mp4") {
+                "video/mp4"
+            } else {
+                "application/octet-stream"
+            }
+        }
+    }
+}
+
+fn resource_extension(typ: wikit::DataEntryType, key: &str) -> String {
+    let lower = key.to_ascii_lowercase();
+    if let Some(ext) = Path::new(&lower).extension().and_then(|e| e.to_str()) {
+        if !ext.is_empty() {
+            return ext.to_string();
+        }
+    }
+    use wikit::DataEntryType::*;
+    match typ {
+        MP3 => "mp3".into(),
+        WAV => "wav".into(),
+        MP4 => "mp4".into(),
+        PNG => "png".into(),
+        JPG => "jpg".into(),
+        SVG => "svg".into(),
+        _ => "bin".into(),
+    }
+}
+
+#[napi]
+pub fn lookup_resource(dictid: String, key: String) -> NapiResult<ResourceLookupResponse> {
+    let key = key.trim().to_string();
+    if key.is_empty() {
+        return Ok(ResourceLookupResponse {
+            found: false,
+            mime: String::new(),
+            url: String::new(),
+        });
+    }
+
+    let dictdb = lock_dictdb()?;
+    let Some(WikitDictionary::Local(ld)) = dictdb.get(&dictid) else {
+        return Ok(ResourceLookupResponse {
+            found: false,
+            mime: String::new(),
+            url: String::new(),
+        });
+    };
+
+    let (typ, bytes) = match ld.lookup_resource(&key) {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(ResourceLookupResponse {
+                found: false,
+                mime: String::new(),
+                url: String::new(),
+            });
+        }
+    };
+
+    let staticdir =
+        config::get_static_dir().map_err(|e| napi_error("failed to get static directory", e))?;
+    let staticid = crypto::md5(dictid.as_bytes());
+    let key_hash = crypto::md5(key.as_bytes());
+    let ext = resource_extension(typ, &key);
+    let filename = format!("{staticid}_res_{key_hash}.{ext}");
+    let file = staticdir.join(&filename);
+    write_static_file(&bytes, file.as_path())?;
+
+    let port = INTERNAL_FS_PORT.load(Ordering::SeqCst);
+    let url = format!("http://127.0.0.1:{port}/{filename}");
+    Ok(ResourceLookupResponse {
+        found: true,
+        mime: resource_mime(typ, &key).to_string(),
+        url,
+    })
 }
 
 #[napi]
@@ -634,8 +981,7 @@ pub async fn test_translation_connection(settings_json: String) -> NapiResult<St
             message: format!("连接失败: {error}"),
         },
     };
-    serde_json::to_string(&response)
-        .map_err(|e| napi_error("failed to serialize test response", e))
+    serde_json::to_string(&response).map_err(|e| napi_error("failed to serialize test response", e))
 }
 
 #[napi]
@@ -654,7 +1000,11 @@ pub fn start_preview_server(dir: String) -> NapiResult<u16> {
         .is_err()
     {
         let port = PREVIEW_SERVER_PORT.load(Ordering::SeqCst);
-        native_log("INFO", "preview-server", format!("already running on port {port}"));
+        native_log(
+            "INFO",
+            "preview-server",
+            format!("already running on port {port}"),
+        );
         return Ok(port);
     }
 
@@ -663,7 +1013,11 @@ pub fn start_preview_server(dir: String) -> NapiResult<u16> {
         "preview-server",
         format!(
             "creating previewer for dir '{}'",
-            if dir.is_empty() { "<empty>" } else { dir.as_str() }
+            if dir.is_empty() {
+                "<empty>"
+            } else {
+                dir.as_str()
+            }
         ),
     );
     let previewer = match preview::Previewer::new(dir) {
@@ -671,13 +1025,21 @@ pub fn start_preview_server(dir: String) -> NapiResult<u16> {
         Err(error) => {
             PREVIEW_SERVER_STARTED.store(false, Ordering::SeqCst);
             PREVIEW_SERVER_PORT.store(0, Ordering::SeqCst);
-            native_log("ERROR", "preview-server", format!("failed to create previewer: {error:?}"));
+            native_log(
+                "ERROR",
+                "preview-server",
+                format!("failed to create previewer: {error:?}"),
+            );
             return Err(napi_error("failed to create preview server", error));
         }
     };
     let port = previewer.port();
     PREVIEW_SERVER_PORT.store(port, Ordering::SeqCst);
-    native_log("INFO", "preview-server", format!("listening on port {port}"));
+    native_log(
+        "INFO",
+        "preview-server",
+        format!("listening on port {port}"),
+    );
 
     let (tx, rx) = tokio::sync::broadcast::channel(1);
     {
@@ -692,12 +1054,19 @@ pub fn start_preview_server(dir: String) -> NapiResult<u16> {
                 .enable_all()
                 .build()?;
             rt.block_on(async move {
-                Arc::new(previewer).run(rx).await.context("preview server exited with error")
+                Arc::new(previewer)
+                    .run(rx)
+                    .await
+                    .context("preview server exited with error")
             })
         }();
 
         if let Err(error) = result {
-            native_log("ERROR", "preview-server", format!("exited with error: {error:?}"));
+            native_log(
+                "ERROR",
+                "preview-server",
+                format!("exited with error: {error:?}"),
+            );
         }
         PREVIEW_SERVER_STARTED.store(false, Ordering::SeqCst);
         PREVIEW_SERVER_PORT.store(0, Ordering::SeqCst);
@@ -739,12 +1108,16 @@ pub struct DictInfo {
     pub desc: String,
     pub script: String,
     pub style: String,
+    pub has_fulltext: bool,
 }
 
 #[napi(object)]
 pub struct SearchEntry {
     pub word: String,
     pub definition: String,
+    /// "headword" | "body"
+    pub kind: String,
+    pub snippet: String,
 }
 
 #[napi]
@@ -758,6 +1131,7 @@ pub fn get_dict_info(dictid: String) -> NapiResult<DictInfo> {
                 desc: ld.head.desc.clone(),
                 script: ld.head.script.clone(),
                 style: ld.head.style.clone(),
+                has_fulltext: ld.head.fsz > 0 && ld.head.fbase > 0,
             }),
             WikitDictionary::Remote(rd) => Ok(DictInfo {
                 id: dictid.clone(),
@@ -765,10 +1139,13 @@ pub fn get_dict_info(dictid: String) -> NapiResult<DictInfo> {
                 desc: String::new(),
                 script: rd.get_script(&dictid),
                 style: rd.get_style(&dictid),
+                has_fulltext: false,
             }),
         }
     } else {
-        Err(Error::from_reason(format!("dictionary not found: {dictid}")))
+        Err(Error::from_reason(format!(
+            "dictionary not found: {dictid}"
+        )))
     }
 }
 
@@ -776,25 +1153,119 @@ pub fn get_dict_info(dictid: String) -> NapiResult<DictInfo> {
 pub fn search_dict(dictid: String, word: String) -> NapiResult<Vec<SearchEntry>> {
     let dictdb = lock_dictdb()?;
     let mut results = Vec::new();
+    let mut seen = HashSet::new();
     if let Some(dict) = dictdb.get(&dictid) {
         let entries = match dict {
             WikitDictionary::Local(ld) => ld.lookup(&word),
             WikitDictionary::Remote(rd) => rd.lookup(&word, &dictid),
         };
         if let Ok(entries) = entries {
-            let mut seen = HashSet::new();
             for (w, def) in entries {
                 if w.is_empty() || !seen.insert(w.clone()) {
                     continue;
                 }
-                results.push(SearchEntry { word: w, definition: def });
+                results.push(SearchEntry {
+                    word: w,
+                    definition: def,
+                    kind: "headword".to_string(),
+                    snippet: String::new(),
+                });
+            }
+        }
+
+        if let WikitDictionary::Local(ld) = dict {
+            if let Ok(hits) = ld.search_fulltext(&word, 30) {
+                for hit in hits {
+                    if hit.headword.is_empty() || !seen.insert(hit.headword.clone()) {
+                        continue;
+                    }
+                    results.push(SearchEntry {
+                        word: hit.headword,
+                        definition: String::new(),
+                        kind: "body".to_string(),
+                        snippet: hit.snippet,
+                    });
+                }
             }
         }
     }
     Ok(results)
 }
 
-use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+fn clear_dict_static_cache(dictid: &str) -> NapiResult<()> {
+    let staticdir =
+        config::get_static_dir().map_err(|e| napi_error("failed to get static directory", e))?;
+    let staticid = crypto::md5(dictid.as_bytes());
+    let cssfile = staticdir.join(format!("{staticid}.css"));
+    let jsfile = staticdir.join(format!("{staticid}.js"));
+    let _ = fs::remove_file(cssfile);
+    let _ = fs::remove_file(jsfile);
+    if let Ok(entries) = fs::read_dir(&staticdir) {
+        let prefix = format!("{staticid}_");
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(&prefix) && name.ends_with(".html") {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[napi]
+pub fn republish_local_dictionary(
+    dictid: String,
+    style: String,
+    script: String,
+    output_path: Option<String>,
+    name: Option<String>,
+    desc: Option<String>,
+) -> NapiResult<DictMeta> {
+    let src = PathBuf::from(&dictid);
+    if !src.exists() {
+        return Err(Error::from_reason(format!(
+            "dictionary file not found: {dictid}"
+        )));
+    }
+    let dest = output_path
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| src.clone());
+
+    let out = wikit::LocalDictionary::republish_with_assets(
+        &src,
+        &dest,
+        &style,
+        &script,
+        name.as_deref(),
+        desc.as_deref(),
+    )
+    .map_err(|e| napi_error("failed to republish dictionary with assets", e))?;
+
+    let local = wikit::LocalDictionary::load(&out)
+        .map_err(|e| napi_error("failed to reload republished dictionary", e))?;
+    let id = local.path.display().to_string();
+    let dict_name = local.head.name.clone();
+
+    wikit::register_local_dictionary(&out)
+        .map_err(|e| napi_error("failed to register republished dictionary", e))?;
+
+    clear_dict_static_cache(&dictid)?;
+    if id != dictid {
+        clear_dict_static_cache(&id)?;
+    }
+
+    let mut dictdb = lock_dictdb()?;
+    // Drop stale in-memory copies that pointed at the old path/content.
+    dictdb.retain(|key, _| key != &dictid && key != &id);
+    dictdb.insert(id.clone(), WikitDictionary::Local(local));
+
+    Ok(DictMeta {
+        name: dict_name,
+        id,
+    })
+}
 
 #[napi]
 pub async fn build_dictionary(
@@ -807,7 +1278,9 @@ pub async fn build_dictionary(
         let outfile_path = PathBuf::from(&outfile);
 
         if !srcfile_path.exists() {
-            return Err(Error::from_reason(format!("source file not found: {srcfile}")));
+            return Err(Error::from_reason(format!(
+                "source file not found: {srcfile}"
+            )));
         }
 
         let suffix = srcfile_path
@@ -817,7 +1290,10 @@ pub async fn build_dictionary(
             .to_lowercase();
 
         if suffix != "txt" && suffix != "mdx" {
-            return Err(Error::from_reason(format!("unsupported source type: {}", suffix)));
+            return Err(Error::from_reason(format!(
+                "unsupported source type: {}",
+                suffix
+            )));
         }
 
         let mut report_progress = |value: f64| {
@@ -837,7 +1313,10 @@ pub async fn build_dictionary(
         match result {
             Ok(path) => {
                 report_progress(1.0);
-                Ok(serde_json::json!({"ok": true, "output": path.display().to_string()}).to_string())
+                Ok(
+                    serde_json::json!({"ok": true, "output": path.display().to_string()})
+                        .to_string(),
+                )
             }
             Err(e) => {
                 report_progress(1.0);

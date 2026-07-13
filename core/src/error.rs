@@ -1,5 +1,5 @@
 pub use anyhow::{Context, Result as AnyResult};
-use nom::{error::{ErrorKind, FromExternalError, ParseError}};
+use nom::error::{ErrorKind, FromExternalError, ParseError};
 use thiserror;
 
 #[macro_export]
@@ -51,19 +51,22 @@ pub type NomResult<'a, O> = std::result::Result<(&'a [u8], O), nom::Err<WikitErr
 pub type Result<T> = std::result::Result<T, WikitError>;
 
 impl WikitError {
-    pub fn new<S>(msg: S) -> Self where S: AsRef<str> {
+    pub fn new<S>(msg: S) -> Self
+    where
+        S: AsRef<str>,
+    {
         WikitError::Plain(msg.as_ref().to_string())
     }
 }
 
 impl<I> ParseError<I> for WikitError {
-  fn from_error_kind(_input: I, kind: ErrorKind) -> Self {
-    WikitError::Anyhow(anyhow::anyhow!(format!("{}", kind.description())))
-  }
+    fn from_error_kind(_input: I, kind: ErrorKind) -> Self {
+        WikitError::Anyhow(anyhow::anyhow!(format!("{}", kind.description())))
+    }
 
-  fn append(_: I, _: ErrorKind, other: Self) -> Self {
-    other
-  }
+    fn append(_: I, _: ErrorKind, other: Self) -> Self {
+        other
+    }
 }
 
 impl<I> FromExternalError<I, anyhow::Error> for WikitError {

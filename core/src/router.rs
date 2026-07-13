@@ -1,20 +1,18 @@
 use crate::config;
-use crate::wikit;
 use crate::crypto;
+use crate::wikit;
 
 use std::net::{IpAddr, Ipv4Addr};
-use std::{sync::Mutex, collections::HashMap};
 use std::sync::Arc;
+use std::{collections::HashMap, sync::Mutex};
 
-use rocket::{Build, Request, catch, get, catchers, routes};
-use rocket::serde::json::Json;
 use once_cell::sync::Lazy;
+use rocket::serde::json::Json;
+use rocket::{catch, catchers, get, routes, Build, Request};
 use wikit_proto::DictMeta;
 
-pub static DICTMP: Lazy<Arc<Mutex<HashMap<String, String>>>> = Lazy::new(|| {
-    Arc::new(Mutex::new(HashMap::new()))
-});
-
+pub static DICTMP: Lazy<Arc<Mutex<HashMap<String, String>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[catch(500)]
 fn internal_error() -> &'static str {
@@ -92,12 +90,12 @@ async fn query(word: String, dictname: String) -> Json<Vec<(String, String)>> {
                         if let Ok(r) = d.lookup(word) {
                             return Json(r);
                         }
-                    },
+                    }
                     wikit::WikitDictionary::Remote(d) => {
                         if let Ok(r) = d.lookup(&word, &dictname) {
                             return Json(r);
                         }
-                    },
+                    }
                 }
             }
         }
@@ -107,12 +105,14 @@ async fn query(word: String, dictname: String) -> Json<Vec<(String, String)>> {
 
 pub fn rocket() -> rocket::Rocket<Build> {
     let cfg = match config::load_config() {
-        Ok(cfg) => {
-            rocket::Config {
-                port: cfg.srvcfg.port,
-                address: cfg.srvcfg.host.parse().unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
-                ..rocket::Config::debug_default()
-            }
+        Ok(cfg) => rocket::Config {
+            port: cfg.srvcfg.port,
+            address: cfg
+                .srvcfg
+                .host
+                .parse()
+                .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
+            ..rocket::Config::debug_default()
         },
         Err(e) => {
             println!("failed to load config with error: {:?}", e);

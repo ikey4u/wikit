@@ -1,11 +1,11 @@
 use crate::elog;
 use crate::error::{AnyResult, Context};
 
-use std::process::Command;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::io::{Error, ErrorKind};
 use std::net::TcpListener;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 struct ArgParser<'a> {
     buf: &'a str,
@@ -103,23 +103,39 @@ pub fn runcmd(cmd: &str, envs: Option<Vec<(String, String)>>) -> AnyResult<Strin
 }
 
 /// parse_path returns a three-element tuple which is `(parentdir, stem, suffix)`
-pub fn parse_path<P>(filepath: P) -> AnyResult<(PathBuf, String, String)> where P: AsRef<Path> {
+pub fn parse_path<P>(filepath: P) -> AnyResult<(PathBuf, String, String)>
+where
+    P: AsRef<Path>,
+{
     let filepath = filepath.as_ref();
     let stdpath = std::fs::canonicalize(filepath)
         .context(elog!("filepath [{}] is not exist", filepath.display()))?;
-    let parentdir = stdpath.parent()
-        .context(elog!("cannot get parent directory of {}", stdpath.display()))?;
-    let stem = stdpath.file_stem()
+    let parentdir = stdpath.parent().context(elog!(
+        "cannot get parent directory of {}",
+        stdpath.display()
+    ))?;
+    let stem = stdpath
+        .file_stem()
         .context(elog!("cannot get file stem from [{}]", stdpath.display()))?
-        .to_str().context(elog!("cannot convert osstr to str"))?;
-    let suffix = stdpath.extension()
+        .to_str()
+        .context(elog!("cannot convert osstr to str"))?;
+    let suffix = stdpath
+        .extension()
         .context(elog!("cannot get extension of [{}]", stdpath.display()))?
-        .to_str().context(elog!("cannot convert osstr to str"))?;
+        .to_str()
+        .context(elog!("cannot convert osstr to str"))?;
 
-    Ok((parentdir.to_path_buf(), stem.to_string(), suffix.to_string()))
+    Ok((
+        parentdir.to_path_buf(),
+        stem.to_string(),
+        suffix.to_string(),
+    ))
 }
 
-pub fn filter_file_by_suffix<P>(path: P, suffix: &str) -> Option<Vec<PathBuf>> where P: AsRef<Path> {
+pub fn filter_file_by_suffix<P>(path: P, suffix: &str) -> Option<Vec<PathBuf>>
+where
+    P: AsRef<Path>,
+{
     let path = path.as_ref();
     let list = path.read_dir().and_then(|files| {
         let list = files
@@ -144,8 +160,13 @@ pub fn filter_file_by_suffix<P>(path: P, suffix: &str) -> Option<Vec<PathBuf>> w
     list.ok()
 }
 
-pub fn normalize_word<S>(word: S) -> String where S: AsRef<str> {
-    let word = word.as_ref().trim_matches(|c: char| c.is_control() || c.is_whitespace());
+pub fn normalize_word<S>(word: S) -> String
+where
+    S: AsRef<str>,
+{
+    let word = word
+        .as_ref()
+        .trim_matches(|c: char| c.is_control() || c.is_whitespace());
     word.to_lowercase()
 }
 
@@ -156,7 +177,7 @@ pub fn normalize_word<S>(word: S) -> String where S: AsRef<str> {
 pub fn get_free_tcp_port(default_port: Option<u16>) -> Option<u16> {
     if let Some(port) = default_port {
         if TcpListener::bind(("127.0.0.1", port)).is_ok() {
-            return default_port
+            return default_port;
         }
     }
     (6000..9000).find(|port| TcpListener::bind(("127.0.0.1", *port)).is_ok())
@@ -169,7 +190,7 @@ pub fn is_chromium_restricted_port(port: u16) -> bool {
 pub fn get_free_web_tcp_port(default_port: Option<u16>) -> Option<u16> {
     if let Some(port) = default_port {
         if !is_chromium_restricted_port(port) && TcpListener::bind(("127.0.0.1", port)).is_ok() {
-            return Some(port)
+            return Some(port);
         }
     }
     (6000..9000)
@@ -220,4 +241,3 @@ fn parse_path_test() {
         assert_eq!(true, false);
     }
 }
-

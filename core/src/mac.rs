@@ -1,11 +1,11 @@
 use crate::error::{AnyResult, Context};
-use crate::{util, config, elog};
+use crate::{config, elog, util};
 
-use std::path::Path;
+use std::collections::BTreeMap;
 use std::env::consts;
 use std::fs::File;
-use std::io::{Write, BufWriter};
-use std::collections::BTreeMap;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 
 use dialoguer::Input;
 
@@ -25,17 +25,23 @@ fn ensure_mac_environment() -> AnyResult<()> {
             match input.as_str() {
                 "n" | "N" | "no" | "NO" => {
                     break "n";
-                },
+                }
                 "y" | "Y" | "yes" | "YES" => {
                     break "y";
-                },
+                }
                 _ => {}
             }
         };
         if ans == "n" {
-            return Err(elog!("please install mac ddk manually from https://github.com/ikey4u/macddk into {}", macddk_dir.display()))
+            return Err(elog!(
+                "please install mac ddk manually from https://github.com/ikey4u/macddk into {}",
+                macddk_dir.display()
+            ));
         }
-        let cmd = format!("git clone https://github.com/ikey4u/macddk '{}'", macddk_dir.display());
+        let cmd = format!(
+            "git clone https://github.com/ikey4u/macddk '{}'",
+            macddk_dir.display()
+        );
         util::runcmd(&cmd, None).context("cannot install macddk")?;
     }
 
@@ -43,18 +49,25 @@ fn ensure_mac_environment() -> AnyResult<()> {
 }
 
 pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) -> AnyResult<()>
-    where I: Iterator<Item = (String, String)>, P: AsRef<Path>,
+where
+    I: Iterator<Item = (String, String)>,
+    P: AsRef<Path>,
 {
     ensure_mac_environment().context(elog!("mac environment requirements are not met"))?;
 
     let input = std::fs::canonicalize(input.as_ref()).context(elog!("cannot find input file"))?;
-    let workdir = input.parent().context(elog!("cannot get working directory"))?.join("wikit");
+    let workdir = input
+        .parent()
+        .context(elog!("cannot get working directory"))?
+        .join("wikit");
     let workdir = workdir.as_path();
     std::fs::create_dir_all(workdir).context(elog!("cannot create working directory"))?;
 
-    let input_stem = input.file_stem()
+    let input_stem = input
+        .file_stem()
         .context(elog!("cannot get input filename"))?
-        .to_str().context(elog!("cannot convert osstr to str"))?;
+        .to_str()
+        .context(elog!("cannot convert osstr to str"))?;
 
     let dcss = if let Some(css) = css {
         css.as_ref().to_path_buf()
@@ -64,7 +77,8 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
             @namespace d url(http://www.apple.com/DTDs/DictionaryService-1.0.rng);
         "#;
         let css = workdir.join("".to_string() + input_stem + ".css");
-        let mut fcss = File::create(&css).context(elog!("cannot create css file: {}", css.display()))?;
+        let mut fcss =
+            File::create(&css).context(elog!("cannot create css file: {}", css.display()))?;
         for line in css_content.lines() {
             let line = line.trim();
             if line.len() > 0 {
@@ -75,13 +89,17 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
         css
     };
 
-    let dname = output.as_ref().file_stem()
+    let dname = output
+        .as_ref()
+        .file_stem()
         .context(elog!("cannot output filename"))?
-        .to_str().context(elog!("cannot convert osstr to str"))?;
+        .to_str()
+        .context(elog!("cannot convert osstr to str"))?;
 
     let dsrc = {
         let xml = workdir.join("".to_string() + input_stem + ".xml");
-        let fxml = File::create(&xml).context(elog!("cannot create xml file: {}", xml.display()))?;
+        let fxml =
+            File::create(&xml).context(elog!("cannot create xml file: {}", xml.display()))?;
         let mut writer = BufWriter::new(fxml);
 
         writer.write(r#"<?xml version="1.0" encoding="UTF-8"?>"#.as_bytes())?;
@@ -104,13 +122,15 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
                        <h1>{entry_title}</h1>
                        {entry_body}
                    </d:entry>"#,
-                entry_id=word,
-                entry_title=word,
-                entry_index=word,
-                entry_body=meaning,
+                entry_id = word,
+                entry_title = word,
+                entry_index = word,
+                entry_body = meaning,
             );
-            let entry = entry.replace(r#"<?xml version="1.0" encoding="UTF-8"?>"#, "")
-                .replace("<entry>", "").replace("</entry>", "")
+            let entry = entry
+                .replace(r#"<?xml version="1.0" encoding="UTF-8"?>"#, "")
+                .replace("<entry>", "")
+                .replace("</entry>", "")
                 .replace("&", "&amp;");
             writer.write(entry.as_bytes())?;
             writer.write(b"\n")?;
@@ -125,8 +145,10 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
 
     let dplist = {
         let plist = workdir.join("".to_string() + input_stem + ".plist");
-        let mut fplist = File::create(&plist).context(elog!("cannot create plist file: {}", plist.display()))?;
-        let content = format!(r#"
+        let mut fplist =
+            File::create(&plist).context(elog!("cannot create plist file: {}", plist.display()))?;
+        let content = format!(
+            r#"
                 <?xml version="1.0" encoding="UTF-8"?>
                 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
                 <plist version="1.0">
@@ -174,7 +196,11 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
         let envs = vec![("DICT_DEV_KIT_OBJ_DIR".into(), tmpdir.clone())];
         let cmd = format!(
             "'{}' '{}' '{}' '{}' '{}'",
-            builder.display(), dname, dsrc.display(), dcss.display(), dplist.display(),
+            builder.display(),
+            dname,
+            dsrc.display(),
+            dcss.display(),
+            dplist.display(),
         );
         println!("[+] Running Mac DDK ...");
         let msg = util::runcmd(&cmd, Some(envs)).context(elog!("cannot run command {}", cmd))?;
@@ -182,7 +208,12 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
 
         let cmds = vec![
             format!("rm -rf '{}'", output.as_ref().display()),
-            format!("ditto --noextattr --norsrc '{}/{}.dictionary' '{}'", tmpdir, dname, output.as_ref().display()),
+            format!(
+                "ditto --noextattr --norsrc '{}/{}.dictionary' '{}'",
+                tmpdir,
+                dname,
+                output.as_ref().display()
+            ),
             format!("rm -rf '{}' '{}'", tmpdir, workdir.display()),
         ];
         for cmd in cmds {
@@ -192,6 +223,9 @@ pub fn create_mac_dictionary<I, P>(src: I, input: P, output: P, css: Option<P>) 
         format!("'{}'", output.as_ref().display())
     };
 
-    println!("[+] Copy dictionary generated at {} into ~/Library/Dictionaries", dictpath);
+    println!(
+        "[+] Copy dictionary generated at {} into ~/Library/Dictionaries",
+        dictpath
+    );
     Ok(())
 }

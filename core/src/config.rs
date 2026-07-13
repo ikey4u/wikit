@@ -1,3 +1,4 @@
+use crate::elog;
 /// wikit use [toml](https://toml.io/en/) format file as its configuration, the content is simple
 /// for now, as showed below
 ///
@@ -52,11 +53,10 @@
 ///         Get dictionary style
 ///
 use crate::error::{AnyResult, Context};
-use crate::elog;
 
 use std::fs::{self, File};
-use std::path::{Path, PathBuf};
 use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 
 use dirs;
 use once_cell::sync::Lazy;
@@ -67,9 +67,8 @@ const APP_DATA_DIR_NAME: &str = "bootsmind-wikit";
 // The max total size of MDX items (word or meaning) contained in one MDX block
 pub const MAX_MDX_ITEM_SIZE: usize = (2 << 20) as usize;
 
-pub static WIKIT_CONFIG: Lazy<crate::config::WikitConfig> = Lazy::new(|| {
-    load_config().expect("Cannot load wikit config")
-});
+pub static WIKIT_CONFIG: Lazy<crate::config::WikitConfig> =
+    Lazy::new(|| load_config().expect("Cannot load wikit config"));
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ClientConfig {
@@ -78,9 +77,7 @@ pub struct ClientConfig {
 
 impl Default for ClientConfig {
     fn default() -> Self {
-        Self {
-            uris: vec![],
-        }
+        Self { uris: vec![] }
     }
 }
 
@@ -125,13 +122,55 @@ pub fn path_to_file_uri(path: &Path) -> String {
 }
 
 pub fn register_client_dictionary_uri(path: &Path) -> AnyResult<()> {
+    register_client_dictionary_uri_replacing(path, &[])
+}
+
+/// Register `path` as a client dictionary URI, removing any existing URIs in
+/// `replace_uris` (and an exact match of the new URI) before appending.
+pub fn register_client_dictionary_uri_replacing(
+    path: &Path,
+    replace_uris: &[String],
+) -> AnyResult<()> {
     let uri = path_to_file_uri(path);
     let mut cfg = load_config()?;
-    if cfg.cltcfg.uris.iter().any(|existing| existing == &uri) {
-        return Ok(());
-    }
+    cfg.cltcfg
+        .uris
+        .retain(|existing| existing != &uri && !replace_uris.iter().any(|r| r == existing));
     cfg.cltcfg.uris.push(uri);
     save_config(&cfg)
+}
+
+/// Remove a client dictionary URI. `uri_or_path` may be a `file://` URI or filesystem path.
+pub fn unregister_client_dictionary_uri(uri_or_path: &str) -> AnyResult<bool> {
+    let mut cfg = load_config()?;
+    let trimmed = uri_or_path.trim();
+    if trimmed.is_empty() {
+        return Ok(false);
+    }
+
+    let mut targets = vec![trimmed.to_string()];
+    let path = PathBuf::from(trimmed);
+    if path.as_os_str().len() > 0 {
+        targets.push(path_to_file_uri(&path));
+    }
+    if let Ok(url) = url::Url::parse(trimmed) {
+        if url.scheme() == "file" {
+            if let Ok(file_path) = url.to_file_path() {
+                targets.push(path_to_file_uri(&file_path));
+                targets.push(file_path.display().to_string());
+            }
+        }
+    }
+
+    let before = cfg.cltcfg.uris.len();
+    cfg.cltcfg
+        .uris
+        .retain(|existing| !targets.iter().any(|t| t == existing));
+    let removed = cfg.cltcfg.uris.len() != before;
+    if removed {
+        save_config(&cfg)?;
+    }
+    Ok(removed)
 }
 
 pub fn save_config(conf: &WikitConfig) -> AnyResult<()> {
@@ -149,7 +188,8 @@ pub fn load_config() -> AnyResult<WikitConfig> {
             .write(toml::to_string(&WikitConfig::default())?.as_bytes())
             .context(elog!("failed to write wikit.toml"))?;
     }
-    let mut fconf = File::open(&confpath).context(elog!("Failed to open config file: {:?}", confpath))?;
+    let mut fconf =
+        File::open(&confpath).context(elog!("Failed to open config file: {:?}", confpath))?;
     let mut conf = String::new();
     fconf.read_to_string(&mut conf)?;
     let conf = toml::from_str::<WikitConfig>(&conf)?;
@@ -169,8 +209,10 @@ pub fn get_static_dir() -> AnyResult<PathBuf> {
     let confdir = get_config_dir()?;
     let staticdir = confdir.join("static");
     if !staticdir.exists() {
-        fs::create_dir_all(&staticdir)
-            .context(elog!("failed to create static directory: {}", staticdir.display()))?;
+        fs::create_dir_all(&staticdir).context(elog!(
+            "failed to create static directory: {}",
+            staticdir.display()
+        ))?;
     }
     Ok(staticdir)
 }

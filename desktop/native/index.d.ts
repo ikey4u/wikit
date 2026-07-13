@@ -13,10 +13,17 @@ export interface LookupResponse {
   script: string
   style: string
 }
+export interface ResourceLookupResponse {
+  found: boolean
+  mime: string
+  url: string
+}
 export function startStaticFileServer(): NapiResult
 export function getDictList(): NapiResult
-export function loadLocalDictionary(path: string): NapiResult
+export function removeLocalDictionary(dictid: string): NapiResult
+export function loadLocalDictionary(path: string, progressCallback: (err: Error | null, value: number) => any): Promise<NapiResult>
 export function lookup(dictid: string, word: string): NapiResult
+export function lookupResource(dictid: string, key: string): NapiResult
 export function getTranslationSettings(): NapiResult
 export function saveTranslationSettings(settingsJson: string): NapiResult
 export function translateText(requestJson: string): Promise<NapiResult>
@@ -32,11 +39,16 @@ export interface DictInfo {
   desc: string
   script: string
   style: string
+  hasFulltext: boolean
 }
 export interface SearchEntry {
   word: string
   definition: string
+  /** "headword" | "body" */
+  kind: string
+  snippet: string
 }
 export function getDictInfo(dictid: string): NapiResult
 export function searchDict(dictid: string, word: string): NapiResult
+export function republishLocalDictionary(dictid: string, style: string, script: string, outputPath?: string | undefined | null, name?: string | undefined | null, desc?: string | undefined | null): NapiResult
 export function buildDictionary(srcfile: string, outfile: string, progressCallback: (err: Error | null, value: number) => any): Promise<NapiResult>

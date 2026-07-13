@@ -1,6 +1,6 @@
 {
   "name": "bootsmind-wikit",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "author": "ikey4u <pwnkeeper@gmail.com>",
   "description": "Bootsmind Wikit desktop shell using Rust native module through NAPI",

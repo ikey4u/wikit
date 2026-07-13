@@ -3,37 +3,39 @@ use crate::reader::WikitSource;
 use crate::util;
 
 use std::cell::{Cell, RefCell};
-use std::{path::{Path, PathBuf}, fs};
-use std::sync::Arc;
-use std::sync::mpsc::channel;
-use std::fs::File;
 use std::collections::HashMap;
+use std::fs::File;
+use std::sync::mpsc::channel;
+use std::sync::Arc;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use axum::{
     body::Full,
-    response::{self, Html, Response, IntoResponse},
-    http::{StatusCode, Uri, Method},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Extension, TypedHeader,
+    },
+    handler::Handler,
+    http::{Method, StatusCode, Uri},
+    response::{self, Html, IntoResponse, Response},
+    routing,
     routing::get_service,
     Router,
-    routing,
-    handler::Handler,
-    extract::{
-        Extension,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        TypedHeader,
-    },
 };
+use notify::{DebouncedEvent, Watcher};
 use std::net::SocketAddr;
-use tower_http::services::ServeDir;
 use tokio::runtime::Builder;
-use tokio::sync::Mutex;
 use tokio::signal;
-use tokio::sync::broadcast::{self, Sender, Receiver};
+use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use tokio::time::Duration;
-use notify::{Watcher, DebouncedEvent};
-use tower_http::cors::{Any, CorsLayer};
 use tower::ServiceBuilder;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 
 #[derive(Debug)]
 pub struct PreviewerState {
@@ -68,10 +70,7 @@ impl Previewer {
             watchdir: watchdir.as_ref().into(),
             svrdir,
             port,
-            state: Arc::new(Mutex::new(PreviewerState {
-                db: db,
-                wss: None,
-            }))
+            state: Arc::new(Mutex::new(PreviewerState { db: db, wss: None })),
         })
     }
 
@@ -81,16 +80,12 @@ impl Previewer {
 
     pub async fn run(self: Arc<Self>, shutdown_rx: Receiver<()>) -> Result<()> {
         let this = Arc::clone(&self);
-        let mut consumer = tokio::spawn(async move {
-            this.consumer(shutdown_rx).await
-        });
+        let mut consumer = tokio::spawn(async move { this.consumer(shutdown_rx).await });
 
         let this = Arc::clone(&self);
-        let mut producer = tokio::spawn(async move {
-            this.producer().await
-        });
+        let mut producer = tokio::spawn(async move { this.producer().await });
 
-        tokio::select!{
+        tokio::select! {
             result = &mut consumer => {
                 producer.abort();
                 match result {
@@ -112,9 +107,10 @@ impl Previewer {
 
     async fn index(Extension(state): Extension<Arc<Mutex<PreviewerState>>>) -> impl IntoResponse {
         let state = state.lock().await;
-        let mut stmt = state.db.prepare(
-            "SELECT resource, size FROM preview where router = '/words'",
-        ).unwrap();
+        let mut stmt = state
+            .db
+            .prepare("SELECT resource, size FROM preview where router = '/words'")
+            .unwrap();
         let mut rows = stmt.query([]).unwrap();
         let page = if let Ok(Some(row)) = rows.next() {
             let page: String = row.get(0).unwrap();
@@ -133,7 +129,8 @@ impl Previewer {
                     No preview page is found
                 </body>
             </html>
-            "#.to_string()
+            "#
+            .to_string()
         };
         Response::builder()
             .status(StatusCode::OK)
@@ -141,7 +138,10 @@ impl Previewer {
             .unwrap()
     }
 
-    async fn resources(Extension(state): Extension<Arc<Mutex<PreviewerState>>>, uri: Uri) -> impl IntoResponse {
+    async fn resources(
+        Extension(state): Extension<Arc<Mutex<PreviewerState>>>,
+        uri: Uri,
+    ) -> impl IntoResponse {
         (StatusCode::NOT_FOUND, format!("No route for: {uri}"))
     }
 
@@ -154,7 +154,8 @@ impl Previewer {
                 for item in WikitSource::new(File::open(header_file)?) {
                     mp.insert(item.header.typ, item.body);
                 }
-                format!(r#"
+                format!(
+                    r#"
                     <head>
                         <script>
                         {}
@@ -163,7 +164,10 @@ impl Previewer {
                         {}
                         </style>
                     </head>
-                "#, mp.get("js").unwrap_or(&"".into()), mp.get("css").unwrap_or(&"".into()))
+                "#,
+                    mp.get("js").unwrap_or(&"".into()),
+                    mp.get("css").unwrap_or(&"".into())
+                )
             };
             let body_html = {
                 let mut html = "<body>".to_string();
@@ -188,11 +192,7 @@ impl Previewer {
             {
                 db.execute(
                     "INSERT OR REPLACE INTO preview (router, resource, size) VALUES (?1, ?2, ?3)",
-                    rusqlite::params![
-                        "/words",
-                        html,
-                        html.len(),
-                    ],
+                    rusqlite::params!["/words", html, html.len(),],
                 )?;
             }
 
@@ -207,14 +207,14 @@ impl Previewer {
 
         let (tx, rx) = channel();
         let mut watcher = notify::watcher(tx, Duration::from_millis(16)).unwrap();
-        watcher.watch(self.watchdir.clone(), notify::RecursiveMode::Recursive).unwrap();
+        watcher
+            .watch(self.watchdir.clone(), notify::RecursiveMode::Recursive)
+            .unwrap();
         loop {
             // rx is not `Send`, we should own the received value
             let path = match rx.recv() {
-                Ok(DebouncedEvent::Write(path)) => {
-                    Some(path.to_owned())
-                }
-                _ => None
+                Ok(DebouncedEvent::Write(path)) => Some(path.to_owned()),
+                _ => None,
             };
             // TODO(2022-04-25): filter out changed files
             if let Some(_) = path {
@@ -237,7 +237,11 @@ impl Previewer {
                 if let Some(Ok(Message::Text(msg))) = socket.recv().await {
                     match msg.as_str() {
                         "WIKIT_PREVIEWER_CONNECT" => {
-                            if socket.send(Message::Text("STATUS:CONNECTED".into())).await.is_err() {
+                            if socket
+                                .send(Message::Text("STATUS:CONNECTED".into()))
+                                .await
+                                .is_err()
+                            {
                                 println!("failed to send response to websocket client");
                             }
                             // initialize the websocket connection
@@ -264,26 +268,32 @@ impl Previewer {
             .layer(
                 ServiceBuilder::new()
                     .layer(cors)
-                    .layer(Extension(self.state.clone()))
+                    .layer(Extension(self.state.clone())),
             );
         let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
         let server = axum::Server::bind(&addr)
             .tcp_nodelay(true)
             .serve(app.into_make_service())
             .with_graceful_shutdown(self.shutdown(shutdown_rx));
-        server.await.map_err(|e| WikitError::new(format!("{:?}", e)))
+        server
+            .await
+            .map_err(|e| WikitError::new(format!("{:?}", e)))
     }
 
     // Graceful shutdown: https://github.com/tokio-rs/axum/tree/main/examples/graceful-shutdown
     async fn shutdown(&self, mut shutdown_rx: Receiver<()>) {
         let ctrl_c = async {
-            signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+            signal::ctrl_c()
+                .await
+                .expect("failed to install Ctrl+C handler");
         };
 
         #[cfg(unix)]
         let terminate = async {
             signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("failed to install signal handler").recv().await;
+                .expect("failed to install signal handler")
+                .recv()
+                .await;
         };
 
         #[cfg(not(unix))]
@@ -301,7 +311,11 @@ impl Drop for Previewer {
     fn drop(&mut self) {
         if self.svrdir.exists() {
             if let Err(e) = fs::remove_dir_all(&self.svrdir) {
-                println!("failed to remove svrdir: {} with error: {}", self.svrdir.display(), e);
+                println!(
+                    "failed to remove svrdir: {} with error: {}",
+                    self.svrdir.display(),
+                    e
+                );
             };
         }
     }

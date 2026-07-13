@@ -224,27 +224,16 @@ select {
   border-radius: 9px;
   cursor: pointer;
   padding: 0 15px;
-  font-weight: 650;
-}
-
-.primary-action {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #ffffff;
-}
-
-.primary-action:hover {
-  background: var(--accent-strong);
-}
-
-.ghost-action {
+  font-weight: 550;
   border: 1px solid #d8dde5;
   background: #ffffff;
   color: var(--text);
 }
 
+.primary-action:hover,
 .ghost-action:hover {
-  background: #f2f4f7;
+  background: #f5f6f8;
+  border-color: #cfd5de;
 }
 
 .settings-message {
