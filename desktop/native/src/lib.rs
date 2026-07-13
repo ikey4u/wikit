@@ -434,17 +434,22 @@ fn ensure_static_file_server() -> NapiResult<u16> {
     }
 }
 
-fn write_file_once(content: &[u8], file: &Path) -> NapiResult<()> {
-    if !file.exists() {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(file)
-            .map_err(|e| napi_error("failed to open static resource", e))?;
-        file.write_all(content)
-            .map_err(|e| napi_error("failed to write static resource", e))?;
+fn write_static_file(content: &[u8], file: &Path) -> NapiResult<()> {
+    if file.exists() {
+        if let Ok(existing) = fs::read(file) {
+            if existing == content {
+                return Ok(());
+            }
+        }
     }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(file)
+        .map_err(|e| napi_error("failed to open static resource", e))?;
+    file.write_all(content)
+        .map_err(|e| napi_error("failed to write static resource", e))?;
     Ok(())
 }
 
@@ -458,11 +463,16 @@ pub fn get_dict_list() -> NapiResult<Vec<DictMeta>> {
     let mut dictlist = Vec::new();
     let mut dictdb = lock_dictdb()?;
     dictdb.clear();
+    let mut seen_names = HashSet::new();
 
     if let Ok(dicts) = wikit::load_client_dictionary() {
-        for dict in dicts {
+        // Prefer later registrations when names collide.
+        for dict in dicts.into_iter().rev() {
             match &dict {
                 WikitDictionary::Local(ld) => {
+                    if !seen_names.insert(ld.head.name.clone()) {
+                        continue;
+                    }
                     let id = ld.path.display().to_string();
                     dictlist.push(DictMeta {
                         name: ld.head.name.clone(),
@@ -472,7 +482,10 @@ pub fn get_dict_list() -> NapiResult<Vec<DictMeta>> {
                 }
                 WikitDictionary::Remote(rd) => {
                     if let Ok(metas) = rd.get_dict_list() {
-                        for meta in metas {
+                        for meta in metas.into_iter().rev() {
+                            if !seen_names.insert(meta.name.clone()) {
+                                continue;
+                            }
                             dictdb.insert(meta.id.clone(), dict.clone());
                             dictlist.push(DictMeta {
                                 name: meta.name,
@@ -483,9 +496,19 @@ pub fn get_dict_list() -> NapiResult<Vec<DictMeta>> {
                 }
             }
         }
+        dictlist.reverse();
     }
 
     Ok(dictlist)
+}
+
+#[napi]
+pub fn remove_local_dictionary(dictid: String) -> NapiResult<bool> {
+    let removed = wikit::unregister_local_dictionary(&dictid)
+        .map_err(|e| napi_error("failed to remove dictionary from config", e))?;
+    let mut dictdb = lock_dictdb()?;
+    dictdb.remove(&dictid);
+    Ok(removed)
 }
 
 #[napi]
@@ -527,12 +550,120 @@ pub fn load_local_dictionary(path: String) -> NapiResult<DictMeta> {
         .map_err(|e| napi_error("failed to load local dictionary", e))?;
     let id = local.path.display().to_string();
     let name = local.head.name.clone();
-    config::register_client_dictionary_uri(&wikit_path)
+    wikit::register_local_dictionary(&wikit_path)
         .map_err(|e| napi_error("failed to register dictionary in config", e))?;
 
     let mut dictdb = lock_dictdb()?;
     dictdb.insert(id.clone(), WikitDictionary::Local(local));
     Ok(DictMeta { name, id })
+}
+
+fn escape_inline_asset(content: &str) -> String {
+    content.replace("</", "<\\/")
+}
+
+fn read_nonempty_text_file(path: &Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    if content.trim().is_empty() {
+        None
+    } else {
+        Some(content)
+    }
+}
+
+fn push_unique_filename(files: &mut Vec<String>, raw: &str) {
+    let name = raw
+        .trim()
+        .trim_start_matches(|c| c == '/' || c == '\\')
+        .replace('\\', "/");
+    let name = name
+        .rsplit('/')
+        .next()
+        .unwrap_or(name.as_str())
+        .trim()
+        .to_string();
+    if name.is_empty() {
+        return;
+    }
+    if !files.iter().any(|existing| existing.eq_ignore_ascii_case(&name)) {
+        files.push(name);
+    }
+}
+
+fn collect_linked_asset_names(html: &str) -> (Vec<String>, Vec<String>) {
+    let mut css_files = Vec::new();
+    let mut js_files = Vec::new();
+    let lower = html.to_ascii_lowercase();
+
+    let mut search_from = 0;
+    while let Some(rel) = lower[search_from..].find(".css") {
+        let end = search_from + rel + 4;
+        let start_window = search_from.saturating_sub(160);
+        let window = &html[start_window..end];
+        if let Some(q) = window.rfind(['\'', '"']) {
+            let raw = &window[q + 1..];
+            if raw.to_ascii_lowercase().ends_with(".css") {
+                push_unique_filename(&mut css_files, raw);
+            }
+        }
+        search_from = end;
+    }
+
+    search_from = 0;
+    while let Some(rel) = lower[search_from..].find(".js") {
+        let end = search_from + rel + 3;
+        // Avoid matching things like ".json"
+        if html.get(end..end + 1).map(|c| c.chars().next().map(|ch| ch.is_ascii_alphanumeric()).unwrap_or(false)).unwrap_or(false) {
+            search_from = end;
+            continue;
+        }
+        let start_window = search_from.saturating_sub(160);
+        let window = &html[start_window..end];
+        if let Some(q) = window.rfind(['\'', '"']) {
+            let raw = &window[q + 1..];
+            if raw.to_ascii_lowercase().ends_with(".js") {
+                push_unique_filename(&mut js_files, raw);
+            }
+        }
+        search_from = end;
+    }
+
+    (css_files, js_files)
+}
+
+fn recover_assets_from_siblings(dict_path: &Path, sample_html: &str, style: &mut String, script: &mut String) {
+    let Some(dir) = dict_path.parent() else {
+        return;
+    };
+    let (mut css_files, mut js_files) = collect_linked_asset_names(sample_html);
+    if let Some(stem) = dict_path.file_stem().and_then(|s| s.to_str()) {
+        push_unique_filename(&mut css_files, &format!("{stem}.css"));
+        push_unique_filename(&mut js_files, &format!("{stem}.js"));
+    }
+
+    if style.trim().is_empty() {
+        for name in &css_files {
+            if let Some(content) = read_nonempty_text_file(&dir.join(name)) {
+                *style = content;
+                break;
+            }
+        }
+    }
+    if script.trim().is_empty() {
+        for name in &js_files {
+            if let Some(content) = read_nonempty_text_file(&dir.join(name)) {
+                *script = content;
+                break;
+            }
+        }
+    }
+}
+
+fn write_static_file_nonempty(content: &[u8], file: &Path) -> NapiResult<()> {
+    if content.iter().all(|b| b.is_ascii_whitespace()) {
+        return Ok(());
+    }
+    write_static_file(content, file)
 }
 
 #[napi]
@@ -569,18 +700,55 @@ pub fn lookup(dictid: String, word: String) -> NapiResult<LookupResponse> {
     let staticid = crypto::md5(dictid.as_bytes());
     let cssfile = staticdir.join(format!("{staticid}.css"));
     let jsfile = staticdir.join(format!("{staticid}.js"));
-    write_file_once(style.as_bytes(), cssfile.as_path())?;
-    write_file_once(script.as_bytes(), jsfile.as_path())?;
-    if let Some(meaning) = words.get(&word) {
-        let wordfile = staticdir.join(format!("{staticid}_{word}.html"));
-        write_file_once(meaning.as_bytes(), wordfile.as_path())?;
+
+    // Prefer dictionary header assets; if missing, recover from sibling files / cache.
+    if style.trim().is_empty() || script.trim().is_empty() {
+        let sample_html = words
+            .values()
+            .find(|html| html.contains(".css") || html.contains(".js") || html.contains("stylesheet"))
+            .cloned()
+            .or_else(|| words.values().next().cloned())
+            .unwrap_or_default();
+        recover_assets_from_siblings(Path::new(&dictid), &sample_html, &mut style, &mut script);
+    }
+    if style.trim().is_empty() {
+        if let Some(cached) = read_nonempty_text_file(&cssfile) {
+            style = cached;
+        }
+    }
+    if script.trim().is_empty() {
+        if let Some(cached) = read_nonempty_text_file(&jsfile) {
+            script = cached;
+        }
     }
 
-    let port = ensure_static_file_server()?;
-    let style = format!(r#" <link rel="stylesheet" href="http://127.0.0.1:{port}/static/{staticid}.css"> "#);
-    let script = format!(r#" <script type="text/javascript" src="http://127.0.0.1:{port}/static/{staticid}.js"></script> "#);
+    write_static_file_nonempty(style.as_bytes(), cssfile.as_path())?;
+    write_static_file_nonempty(script.as_bytes(), jsfile.as_path())?;
+    if let Some(meaning) = words.get(&word) {
+        let wordfile = staticdir.join(format!("{staticid}_{word}.html"));
+        write_static_file(meaning.as_bytes(), wordfile.as_path())?;
+    }
 
-    Ok(LookupResponse { words, script, style })
+    // Inline assets for srcdoc iframes: external <link>/<script src> are unreliable there.
+    let style_tag = if style.trim().is_empty() {
+        String::new()
+    } else {
+        format!("<style>{}</style>", escape_inline_asset(&style))
+    };
+    let script_tag = if script.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"<script type="text/javascript">{}</script>"#,
+            escape_inline_asset(&script)
+        )
+    };
+
+    Ok(LookupResponse {
+        words,
+        script: script_tag,
+        style: style_tag,
+    })
 }
 
 #[napi]
@@ -792,6 +960,75 @@ pub fn search_dict(dictid: String, word: String) -> NapiResult<Vec<SearchEntry>>
         }
     }
     Ok(results)
+}
+
+fn clear_dict_static_cache(dictid: &str) -> NapiResult<()> {
+    let staticdir = config::get_static_dir().map_err(|e| napi_error("failed to get static directory", e))?;
+    let staticid = crypto::md5(dictid.as_bytes());
+    let cssfile = staticdir.join(format!("{staticid}.css"));
+    let jsfile = staticdir.join(format!("{staticid}.js"));
+    let _ = fs::remove_file(cssfile);
+    let _ = fs::remove_file(jsfile);
+    if let Ok(entries) = fs::read_dir(&staticdir) {
+        let prefix = format!("{staticid}_");
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(&prefix) && name.ends_with(".html") {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[napi]
+pub fn republish_local_dictionary(
+    dictid: String,
+    style: String,
+    script: String,
+    output_path: Option<String>,
+    name: Option<String>,
+    desc: Option<String>,
+) -> NapiResult<DictMeta> {
+    let src = PathBuf::from(&dictid);
+    if !src.exists() {
+        return Err(Error::from_reason(format!("dictionary file not found: {dictid}")));
+    }
+    let dest = output_path
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| src.clone());
+
+    let out = wikit::LocalDictionary::republish_with_assets(
+        &src,
+        &dest,
+        &style,
+        &script,
+        name.as_deref(),
+        desc.as_deref(),
+    )
+    .map_err(|e| napi_error("failed to republish dictionary with assets", e))?;
+
+    let local = wikit::LocalDictionary::load(&out)
+        .map_err(|e| napi_error("failed to reload republished dictionary", e))?;
+    let id = local.path.display().to_string();
+    let dict_name = local.head.name.clone();
+
+    wikit::register_local_dictionary(&out)
+        .map_err(|e| napi_error("failed to register republished dictionary", e))?;
+
+    clear_dict_static_cache(&dictid)?;
+    if id != dictid {
+        clear_dict_static_cache(&id)?;
+    }
+
+    let mut dictdb = lock_dictdb()?;
+    // Drop stale in-memory copies that pointed at the old path/content.
+    dictdb.retain(|key, _| key != &dictid && key != &id);
+    dictdb.insert(id.clone(), WikitDictionary::Local(local));
+
+    Ok(DictMeta { name: dict_name, id })
 }
 
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};

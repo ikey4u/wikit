@@ -132,6 +132,14 @@
             <div id="wordContent" class="workspace is-hidden">
               <div class="toolbar">
                 <div class="field has-addons">
+                  <div class="control history-nav-control">
+                    <button id="lookupBackBtn" class="history-nav-btn" type="button" title="上一个词条" aria-label="上一个词条" disabled>
+                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 3.2 5.4 8l4.8 4.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button id="lookupForwardBtn" class="history-nav-btn" type="button" title="下一个词条" aria-label="下一个词条" disabled>
+                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.8 3.2 10.6 8 5.8 12.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                  </div>
                   <div class="control dictionary-control">
                     <span class="select is-rounded is-small">
                       <select id="dictSelect"></select>
@@ -142,15 +150,21 @@
                     <span class="icon is-small is-left">⌕</span>
                     <div id="suggestionPopup" class="suggestion-popup is-hidden"></div>
                   </div>
-                  <div class="control dict-add-control">
-                    <button id="addDictMenuBtn" class="dict-add-btn" type="button" title="添加词典" aria-label="添加词典" aria-haspopup="menu" aria-expanded="false">
+                  <div class="control dict-menu-control">
+                    <button id="dictMenuBtn" class="dict-menu-btn" type="button" title="词典操作" aria-label="词典操作" aria-haspopup="menu" aria-expanded="false">
                       <svg viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="10" cy="4.5" r="1.5" fill="currentColor"/>
+                        <circle cx="10" cy="10" r="1.5" fill="currentColor"/>
+                        <circle cx="10" cy="15.5" r="1.5" fill="currentColor"/>
                       </svg>
                     </button>
-                    <div id="addDictMenu" class="dict-add-menu is-hidden" role="menu">
-                      <button id="toolbarImportWikitBtn" class="dict-add-menu-item" type="button" role="menuitem">导入 Bootsmind 词典 (.wikit)</button>
-                      <button id="toolbarImportMdxBtn" class="dict-add-menu-item" type="button" role="menuitem">导入 MDX 词典 (.mdx)</button>
+                    <div id="dictMenu" class="dict-menu is-hidden" role="menu">
+                      <div class="dict-menu-label">添加词典</div>
+                      <button id="toolbarImportWikitBtn" class="dict-menu-item" type="button" role="menuitem">Bootsmind 词典 (.wikit)</button>
+                      <button id="toolbarImportMdxBtn" class="dict-menu-item" type="button" role="menuitem">MDX 词典 (.mdx)</button>
+                      <div class="dict-menu-divider" role="separator"></div>
+                      <button id="toolbarEditDictBtn" class="dict-menu-item" type="button" role="menuitem">修改词典</button>
+                      <button id="toolbarRemoveDictBtn" class="dict-menu-item is-danger" type="button" role="menuitem">删除词典</button>
                     </div>
                   </div>
                 </div>
@@ -182,13 +196,15 @@
                 <div class="dm-topbar">
                   <button id="openDictDir" class="dm-dir-btn" type="button" title="Open Dictionary Directory">选择词典目录</button>
                   <div style="flex:1"></div>
-                  <button id="addEntryBtn" class="dm-add-btn" type="button">+ 添加词条</button>
+                  <button id="addEntryBtn" class="dm-dir-btn" type="button">+ 添加词条</button>
                   <button id="batchImportBtn" class="dm-import-btn" type="button">批量导入</button>
                 </div>
                 <div class="dm-body">
                   <div class="dm-sidebar">
                     <div class="dm-sidebar-actions">
                       <button id="editMetaBtn" class="dm-dir-btn" type="button">元信息</button>
+                      <button id="importCssBtn" class="dm-dir-btn" type="button">导入 CSS</button>
+                      <button id="importJsBtn" class="dm-dir-btn" type="button">导入 JS</button>
                     </div>
                     <div class="dm-search-wrap">
                       <input id="dictMakerSearch" class="dm-search" type="text" placeholder="搜索词条...">
@@ -227,11 +243,11 @@
                   </div>
                 </div>
                 <div class="dm-bottombar">
-                  <button id="saveEntryBtn" class="primary-action" type="button">保存</button>
+                  <button id="saveEntryBtn" class="ghost-action" type="button">保存</button>
                   <button id="deleteEntryBtn" class="ghost-action" type="button">删除</button>
                   <span id="saveStatus" class="save-status"></span>
                   <div style="flex:1"></div>
-                  <button id="buildDictBtn" class="primary-action" type="button">构建词典</button>
+                  <button id="buildDictBtn" class="ghost-action" type="button">构建词典</button>
                 </div>
               </div>
               <div id="dictEditorContent" class="tool-content is-hidden">
@@ -240,6 +256,8 @@
                     <option value="">选择词典...</option>
                   </select>
                   <button id="deOpenLocalDictBtn" class="de-meta-btn" type="button">选择本地词典</button>
+                  <button id="deImportCssBtn" class="de-meta-btn" type="button">导入 CSS</button>
+                  <button id="deImportJsBtn" class="de-meta-btn" type="button">导入 JS</button>
                   <div style="flex:1"></div>
                   <button id="deEditMetaBtn" class="de-meta-btn is-hidden" type="button">元信息</button>
                 </div>
@@ -279,10 +297,10 @@
                   </div>
                 </div>
                 <div class="de-bottombar">
-                  <button id="deSaveBtn" class="primary-action" type="button" disabled>保存</button>
+                  <button id="deSaveBtn" class="ghost-action" type="button" disabled>保存</button>
                   <span id="deSaveStatus" class="save-status"></span>
                   <div style="flex:1"></div>
-                  <button id="deExportBtn" class="ghost-action" type="button">导出为 wikit</button>
+                  <button id="deExportBtn" class="ghost-action" type="button">打包样式并导出</button>
                 </div>
               </div>
               <div id="mdxConverterContent" class="tool-content is-hidden">
@@ -370,23 +388,24 @@
         <div class="dm-meta-fields">
           <div class="dm-meta-field">
             <label class="dm-meta-label">名称</label>
-            <input id="deMetaName" class="dm-meta-input" type="text" readonly>
+            <input id="deMetaName" class="dm-meta-input" type="text" placeholder="词典名称">
           </div>
           <div class="dm-meta-field">
             <label class="dm-meta-label">描述</label>
-            <input id="deMetaDesc" class="dm-meta-input" type="text" readonly>
+            <input id="deMetaDesc" class="dm-meta-input" type="text" placeholder="词典描述">
           </div>
           <div class="dm-meta-field">
             <label class="dm-meta-label">CSS</label>
-            <textarea id="deMetaCss" class="dm-batch-textarea" rows="5" readonly></textarea>
+            <textarea id="deMetaCss" class="dm-batch-textarea" rows="5" placeholder="词典样式"></textarea>
           </div>
           <div class="dm-meta-field">
             <label class="dm-meta-label">JS</label>
-            <textarea id="deMetaJs" class="dm-batch-textarea" rows="5" readonly></textarea>
+            <textarea id="deMetaJs" class="dm-batch-textarea" rows="5" placeholder="词典脚本"></textarea>
           </div>
         </div>
         <div class="dm-prompt-actions">
-          <button id="deMetaClose" class="dm-prompt-btn dm-prompt-cancel" type="button">关闭</button>
+          <button id="deMetaClose" class="dm-prompt-btn dm-prompt-cancel" type="button">取消</button>
+          <button id="deMetaSave" class="dm-prompt-btn dm-prompt-ok" type="button">保存到词典</button>
         </div>
       </div>
     </div>

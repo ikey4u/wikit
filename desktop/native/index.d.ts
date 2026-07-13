@@ -15,6 +15,7 @@ export interface LookupResponse {
 }
 export function startStaticFileServer(): NapiResult
 export function getDictList(): NapiResult
+export function removeLocalDictionary(dictid: string): NapiResult
 export function loadLocalDictionary(path: string): NapiResult
 export function lookup(dictid: string, word: string): NapiResult
 export function getTranslationSettings(): NapiResult
@@ -39,4 +40,5 @@ export interface SearchEntry {
 }
 export function getDictInfo(dictid: string): NapiResult
 export function searchDict(dictid: string, word: string): NapiResult
+export function republishLocalDictionary(dictid: string, style: string, script: string, outputPath?: string | undefined | null, name?: string | undefined | null, desc?: string | undefined | null): NapiResult
 export function buildDictionary(srcfile: string, outfile: string, progressCallback: (err: Error | null, value: number) => any): Promise<NapiResult>

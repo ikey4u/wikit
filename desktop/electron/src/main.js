@@ -404,9 +404,20 @@ ipcMain.handle('app:open-config-dir', async () => {
 })
 ipcMain.handle('dict:list', () => getNative().getDictList())
 ipcMain.handle('dict:load-local', (_event, filePath) => getNative().loadLocalDictionary(String(filePath)))
+ipcMain.handle('dict:remove-local', (_event, dictid) => getNative().removeLocalDictionary(String(dictid)))
 ipcMain.handle('dict:lookup', (_event, dictid, word) => getNative().lookup(dictid, word))
 ipcMain.handle('dict:get-info', (_event, dictid) => getNative().getDictInfo(dictid))
 ipcMain.handle('dict:search', (_event, dictid, word) => getNative().searchDict(dictid, word))
+ipcMain.handle('dict:republish-local', (_event, dictid, style, script, outputPath, name, desc) =>
+  getNative().republishLocalDictionary(
+    String(dictid),
+    String(style ?? ''),
+    String(script ?? ''),
+    outputPath == null || outputPath === '' ? null : String(outputPath),
+    name == null || name === '' ? null : String(name),
+    desc == null ? null : String(desc)
+  )
+)
 ipcMain.handle('translation:get-settings', () => getNative().getTranslationSettings())
 ipcMain.handle('translation:save-settings', (_event, settingsJson) => {
   const settings = getNative().saveTranslationSettings(settingsJson)
@@ -470,13 +481,14 @@ ipcMain.handle('dialog:open-directory', async () => {
 
   return result.filePaths[0]
 })
-ipcMain.handle('dialog:open-file', async () => {
+ipcMain.handle('dialog:open-file', async (_event, filters) => {
+  const defaultFilters = [
+    { name: 'Dictionary Files', extensions: ['txt', 'csv', 'wikit', 'mdx', 'md'] },
+    { name: 'All Files', extensions: ['*'] }
+  ]
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
-    filters: [
-      { name: 'Dictionary Files', extensions: ['txt', 'csv', 'wikit', 'mdx', 'md'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
+    filters: Array.isArray(filters) && filters.length ? filters : defaultFilters
   })
 
   if (result.canceled || result.filePaths.length === 0) {
