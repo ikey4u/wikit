@@ -32,6 +32,20 @@ pub struct FSTIndex {
     length: u64,
 }
 
+/// Allowed Levenshtein distance for fuzzy headword lookup.
+///
+/// `fst::automaton::Levenshtein` already counts edits in Unicode scalar values
+/// (characters), not bytes. The threshold must use the same unit — `chars().count()` —
+/// otherwise a short CJK query like "测试" (2 chars / 6 bytes) is given distance 2
+/// and matches unrelated Latin/symbol keys (e.g. `%`, `'a`) within two char edits.
+fn fuzzy_edit_distance(keyword: &str) -> u32 {
+    match keyword.chars().count() {
+        0 | 1 | 2 => 0,
+        3 | 4 | 5 => 1,
+        _ => 2,
+    }
+}
+
 impl FSTIndex {
     /// Create index from iterator of `(keyword, offset) of type (&str, u64)`,
     /// the keyword must be lexicographically ordered and has no duplications.
@@ -70,32 +84,30 @@ impl FSTIndex {
         };
         let map = Map::new(mmap)?;
 
-        let fuzzycnt = match keyword.as_ref().len() {
-            0 | 1 | 2 => 0,
-            3 | 4 | 5 => 1,
-            _ => 2,
-        };
-        let query = Levenshtein::new(keyword.as_ref(), fuzzycnt)?;
-        let mut stream = map.search(&query).into_stream();
-
+        let keyword = keyword.as_ref();
         let mut r = vec![];
         let mut seen = HashSet::new();
-        if let Some(v) = map.get(keyword.as_ref()) {
-            let key = keyword.as_ref().to_string();
+        if let Some(v) = map.get(keyword) {
+            let key = keyword.to_string();
             seen.insert(key.clone());
             r.push((key, v));
         }
 
-        let (mut cnt, limit) = (0, 20);
-        while let Some((k, v)) = stream.next() {
-            let key = String::from_utf8(k.to_vec())?;
-            if !seen.insert(key.clone()) {
-                continue;
-            }
-            r.push((key, v));
-            cnt += 1;
-            if cnt >= limit {
-                break;
+        let fuzzycnt = fuzzy_edit_distance(keyword);
+        if fuzzycnt > 0 {
+            let query = Levenshtein::new(keyword, fuzzycnt)?;
+            let mut stream = map.search(&query).into_stream();
+            let (mut cnt, limit) = (0, 20);
+            while let Some((k, v)) = stream.next() {
+                let key = String::from_utf8(k.to_vec())?;
+                if !seen.insert(key.clone()) {
+                    continue;
+                }
+                r.push((key, v));
+                cnt += 1;
+                if cnt >= limit {
+                    break;
+                }
             }
         }
         Ok(r)
@@ -107,5 +119,27 @@ impl FSTIndex {
             offset,
             length,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fuzzy_edit_distance;
+
+    #[test]
+    fn fuzzy_distance_uses_unicode_char_count() {
+        assert_eq!(fuzzy_edit_distance("a"), 0);
+        assert_eq!(fuzzy_edit_distance("ab"), 0);
+        assert_eq!(fuzzy_edit_distance("abc"), 1);
+        assert_eq!(fuzzy_edit_distance("hello"), 1);
+        assert_eq!(fuzzy_edit_distance("testing"), 2);
+
+        // CJK: character count, not UTF-8 byte length.
+        assert_eq!("测试".len(), 6);
+        assert_eq!("测试".chars().count(), 2);
+        assert_eq!(fuzzy_edit_distance("测"), 0);
+        assert_eq!(fuzzy_edit_distance("测试"), 0);
+        assert_eq!(fuzzy_edit_distance("计算机"), 1);
+        assert_eq!(fuzzy_edit_distance("奥林匹克运动会"), 2);
     }
 }
