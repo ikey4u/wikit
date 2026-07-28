@@ -15,8 +15,9 @@
     "dist:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false npm run build:native && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --publish never",
     "build:dmg": "node scripts/build-dmg.js"
   },
+  "repository": "https://github.com/ikey4u/wikit.git",
   "devDependencies": {
-    "electron": "^35.0.0",
+    "electron": "35.0.0",
     "electron-builder": "^26.0.12",
     "electron-reloader": "^1.2.3"
   },
