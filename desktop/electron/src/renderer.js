@@ -254,7 +254,7 @@ function showPlaceholder(text) {
 }
 
 async function navigateToWord(word, options = {}) {
-  const target = String(word || '').trim()
+  const target = normalizeLookupWord(word)
   if (!target) return
 
   const dictid = options.dictid || dictSelect.value
@@ -297,6 +297,70 @@ function highlightSnippet(snippet, query) {
   }
 }
 
+function headwordMatchRank(word, query) {
+  const w = String(word || '').trim().toLowerCase()
+  const q = String(query || '').trim().toLowerCase()
+  if (!w || !q) return 100
+  if (w === q) return 0
+  if (w.startsWith(q)) return 1
+  if (q.startsWith(w)) return 2
+  try {
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (new RegExp(`(?:^|[^a-z0-9\\u00c0-\\u024f])${escaped}(?:$|[^a-z0-9\\u00c0-\\u024f])`, 'i').test(w)) {
+      return 3
+    }
+  } catch (_error) {
+    // fall through
+  }
+  if (w.includes(q)) return 4
+  return 5
+}
+
+function sortHeadwordsByRelevance(words, query) {
+  return [...(Array.isArray(words) ? words : [])].sort((a, b) => {
+    const rankDiff = headwordMatchRank(a, query) - headwordMatchRank(b, query)
+    if (rankDiff !== 0) return rankDiff
+    const lenDiff = String(a).length - String(b).length
+    if (lenDiff !== 0) return lenDiff
+    return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' })
+  })
+}
+
+function sortSearchEntriesByRelevance(entries, query) {
+  return [...(Array.isArray(entries) ? entries : [])].sort((a, b) => {
+    const aKind = a?.kind === 'body' ? 1 : 0
+    const bKind = b?.kind === 'body' ? 1 : 0
+    if (aKind !== bKind) return aKind - bKind
+    const rankDiff = headwordMatchRank(a?.word, query) - headwordMatchRank(b?.word, query)
+    if (rankDiff !== 0) return rankDiff
+    return String(a?.word || '').localeCompare(String(b?.word || ''), undefined, { sensitivity: 'base' })
+  })
+}
+
+function openCandidateEntry(word, response, html) {
+  const target = String(word || '').trim()
+  if (!target) return
+
+  const cachedHtml = html || (response && response.words && (
+    response.words[target] ||
+    response.words[Object.keys(response.words).find((key) => key.toLowerCase() === target.toLowerCase()) || '']
+  ))
+
+  if (cachedHtml) {
+    const dictid = dictSelect.value
+    searchInput.value = target
+    hide(suggestionPopup)
+    if (dictid) {
+      pushLookupHistory(target, dictid)
+    }
+    currentResponse = response || currentResponse
+    renderMeaning(target, response || currentResponse, { html: cachedHtml })
+    return
+  }
+
+  navigateToWord(target, { pushHistory: true, forceOpen: true }).catch(() => {})
+}
+
 function renderCandidates(words, response, bodyHits = [], query = '') {
   candidateList.replaceChildren()
   hide(suggestionPopup)
@@ -315,10 +379,6 @@ function renderCandidates(words, response, bodyHits = [], query = '') {
   hide(noCandidate)
   show(candidateList)
 
-  const openEntry = (word) => {
-    navigateToWord(word, { pushHistory: true, forceOpen: true }).catch(() => {})
-  }
-
   for (const word of headwords) {
     const item = document.createElement('div')
     item.className = 'candidate-row'
@@ -331,7 +391,11 @@ function renderCandidates(words, response, bodyHits = [], query = '') {
         <span class="candidate-item-kind is-headword">词头</span>
       </span>
     `
-    button.addEventListener('click', () => openEntry(word))
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      openCandidateEntry(word, response)
+    })
     item.appendChild(button)
     candidateList.appendChild(item)
   }
@@ -353,7 +417,11 @@ function renderCandidates(words, response, bodyHits = [], query = '') {
       </span>
       ${snippet ? `<span class="candidate-item-snippet">${highlightSnippet(snippet, query)}</span>` : ''}
     `
-    button.addEventListener('click', () => openEntry(word))
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      openCandidateEntry(word, response, hit.definition)
+    })
     item.appendChild(button)
     candidateList.appendChild(item)
   }
@@ -424,7 +492,11 @@ function decodeHrefPart(value) {
 }
 
 function parseEntryHref(href) {
-  let rest = String(href || '').replace(/^entry:\/*/i, '')
+  let rest = String(href || '').trim()
+  // Some MDX/Oxford entries store doubled prefixes like entry://entry://word.
+  while (/^entry:/i.test(rest)) {
+    rest = rest.replace(/^entry:\/*/i, '')
+  }
   rest = decodeHrefPart(rest)
   const hashIndex = rest.indexOf('#')
   let word = rest
@@ -433,14 +505,26 @@ function parseEntryHref(href) {
     word = rest.slice(0, hashIndex)
     hash = rest.slice(hashIndex + 1)
   }
-  word = word.replace(/\/+$/, '').trim()
+  word = word.replace(/^\/+/, '').replace(/\/+$/, '').trim()
   return { word, hash }
 }
 
 function parseSoundHref(href) {
-  return decodeHrefPart(String(href || '').replace(/^sound:\/*/i, ''))
+  return decodeHrefPart(
+    String(href || '')
+      .trim()
+      .replace(/^(?:sound|snd):\/*/i, '')
+  )
     .replace(/^[\\/]+/, '')
     .trim()
+}
+
+function normalizeLookupWord(word) {
+  let value = String(word || '').trim()
+  while (/^entry:/i.test(value)) {
+    value = value.replace(/^entry:\/*/i, '')
+  }
+  return value.replace(/^\/+/, '').replace(/\/+$/, '').trim()
 }
 
 function findExactWordKey(words, word) {
@@ -452,7 +536,7 @@ function findExactWordKey(words, word) {
 
 function parseLinkRedirect(body) {
   const match = String(body || '').trim().match(/^@@@LINK=\s*(.+?)\s*$/i)
-  return match ? match[1].trim() : null
+  return match ? normalizeLookupWord(match[1]) : null
 }
 
 async function resolveLookupEntry(dictid, word, response, depth = 0) {
@@ -505,7 +589,11 @@ function escapeHtmlAttr(value) {
 function sanitizeMeaningHtml(html) {
   let out = String(html || '')
   // Convert entry/sound links so the iframe never navigates to blocked custom schemes.
-  out = out.replace(/\shref\s*=\s*(["'])((?:entry|sound):[\s\S]*?)\1/gi, (_match, _quote, href) => (
+  // Also cover unquoted hrefs and Oxford's snd:// alias.
+  out = out.replace(/\shref\s*=\s*(["'])((?:entry|sound|snd):[\s\S]*?)\1/gi, (_match, _quote, href) => (
+    ` href="#" data-wikit-nav="${escapeHtmlAttr(href)}"`
+  ))
+  out = out.replace(/\shref\s*=\s*((?:entry|sound|snd):[^\s>]+)/gi, (_match, href) => (
     ` href="#" data-wikit-nav="${escapeHtmlAttr(href)}"`
   ))
   // Preserve known OALD actions as data attributes; drop other inline handlers (CSP blocks them).
@@ -574,7 +662,7 @@ function handleMeaningFrameClick(event) {
   const nav = anchor.getAttribute('data-wikit-nav')
   const href = nav || anchor.getAttribute('href') || ''
 
-  if (nav || /^(entry|sound):/i.test(href)) {
+  if (nav || /^(?:entry|sound|snd):/i.test(href)) {
     event.preventDefault()
     event.stopPropagation()
     handleDictionaryNavMessage(nav || href).catch(() => {})
@@ -735,14 +823,15 @@ async function playDictionarySound(resource) {
 }
 
 async function handleDictionaryNavMessage(href) {
-  if (/^entry:/i.test(href)) {
-    const { word, hash } = parseEntryHref(href)
+  const raw = String(href || '').trim()
+  if (/^entry:/i.test(raw)) {
+    const { word, hash } = parseEntryHref(raw)
     if (!word) return
     await navigateToWord(word, { pushHistory: true, hash, forceOpen: true })
     return
   }
-  if (/^sound:/i.test(href)) {
-    await playDictionarySound(parseSoundHref(href))
+  if (/^(?:sound|snd):/i.test(raw)) {
+    await playDictionarySound(parseSoundHref(raw))
   }
 }
 
@@ -1055,17 +1144,31 @@ async function lookupCurrentWord(options = {}) {
     }
 
     currentResponse = resolved.response
-    const words = Object.keys(resolved.response?.words || {}).sort()
+    const words = sortHeadwordsByRelevance(
+      Object.keys(resolved.response?.words || {}),
+      preferredWord
+    )
 
     // Clicking a result should open the entry, not re-show the fulltext list.
-    if (forceOpen && resolved.resolved && resolved.html) {
-      if (searchInput.value.trim() !== resolved.word) {
-        searchInput.value = resolved.word
+    if (forceOpen) {
+      let openWord = resolved.resolved ? resolved.word : preferredWord
+      let openHtml = resolved.resolved ? resolved.html : null
+      if (!openHtml && words.length) {
+        const exactKey = findExactWordKey(resolved.response?.words, preferredWord)
+        openWord = exactKey || words[0]
+        openHtml = resolved.response?.words?.[openWord] || null
       }
-      if (pushHistory) {
-        pushLookupHistory(resolved.word, dictid)
+      if (openHtml) {
+        if (searchInput.value.trim() !== openWord) {
+          searchInput.value = openWord
+        }
+        if (pushHistory) {
+          pushLookupHistory(openWord, dictid)
+        }
+        renderMeaning(openWord, resolved.response, { html: openHtml, hash })
+        return
       }
-      renderMeaning(resolved.word, resolved.response, { html: resolved.html, hash })
+      showPlaceholder('Word not found')
       return
     }
 
@@ -1086,8 +1189,11 @@ async function lookupCurrentWord(options = {}) {
       }
       renderMeaning(resolved.word, resolved.response, { html: resolved.html, hash })
     } else if (resolved.resolved && resolved.html && bodyHits.length > 0) {
-      // Headword hit + other entries that contain the query in body → show both.
-      const headwords = [resolved.word, ...words.filter((w) => w !== resolved.word)]
+      // Exact / best headword first, then other headwords, then body hits.
+      const headwords = sortHeadwordsByRelevance(
+        [resolved.word, ...words.filter((w) => w !== resolved.word)],
+        preferredWord
+      )
       if (pushHistory) {
         pushLookupHistory(resolved.word, dictid)
       }
@@ -2484,7 +2590,10 @@ async function dePerformSearch() {
     return
   }
   try {
-    const entries = await window.wikit.searchDict(deCurrentDictId, word)
+    const entries = sortSearchEntriesByRelevance(
+      await window.wikit.searchDict(deCurrentDictId, word),
+      word
+    )
     deEntryList.replaceChildren()
     if (entries.length === 0) {
       deEntryList.innerHTML = '<div class="de-empty">未找到词条</div>'
@@ -2493,12 +2602,15 @@ async function dePerformSearch() {
     for (const entry of entries) {
       const item = document.createElement('div')
       item.className = 'de-entry-item'
+      item.dataset.word = entry.word
       const kindLabel = entry.kind === 'body' ? '（正文）' : ''
       item.textContent = `${entry.word}${kindLabel}`
       if (entry.snippet) {
         item.title = entry.snippet
       }
-      item.addEventListener('click', async () => {
+      item.addEventListener('click', async (event) => {
+        event.preventDefault()
+        event.stopPropagation()
         let definition = entry.definition
         if (!definition) {
           try {
@@ -2531,7 +2643,7 @@ function deSelectEntry(word, definition) {
   deCurrentWord = word
   deCurrentDefinition = definition
   document.querySelectorAll('.de-entry-item').forEach(el => {
-    el.classList.toggle('is-selected', el.textContent === word)
+    el.classList.toggle('is-selected', el.dataset.word === word)
   })
   deHtmlEditor.textContent = definition || ''
   deSaveBtn.disabled = false

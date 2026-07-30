@@ -929,11 +929,12 @@ impl LocalDictionary {
     }
 
     fn read_logical_entry(&self, logical_off: u64) -> WikitResult<(u8, Vec<u8>)> {
-        let blocks = &self.head.blocks;
-        let idx = wikit_block::find_block_index(blocks, logical_off)?;
-        let plain = wikit_block::load_block(&self.path, blocks, idx, &self.block_cache)?;
-        let rel = (logical_off - blocks[idx].ulog_off) as usize;
-        wikit_block::read_entry_from_slice(&plain, rel)
+        wikit_block::read_entry_at_logical_offset(
+            &self.path,
+            &self.head.blocks,
+            logical_off,
+            &self.block_cache,
+        )
     }
 
     pub fn lookup<P>(&self, word: P) -> WikitResult<Vec<(String, String)>>

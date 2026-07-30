@@ -10,6 +10,9 @@
   --hover: #f5f6f8;
   --accent: #1f7a4d;
   --accent-soft: #eaf5ef;
+  --scrollbar-size: 6px;
+  --scrollbar-thumb: rgba(31, 35, 40, 0.18);
+  --scrollbar-thumb-hover: rgba(31, 35, 40, 0.32);
 }
 
 html,
@@ -336,7 +339,7 @@ a:hover {
   overflow-y: auto;
   line-height: 1.7;
   scrollbar-width: thin;
-  scrollbar-color: #cfd4dc transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .translation-output.is-copied {
@@ -381,7 +384,7 @@ a:hover {
   overflow-y: auto;
   padding: 8px;
   scrollbar-width: thin;
-  scrollbar-color: #cfd4dc transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .history-empty {
@@ -828,6 +831,8 @@ a:hover {
 }
 
 .meaning-frame {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   border: 0;
@@ -837,41 +842,72 @@ a:hover {
 .candidate-list {
   position: absolute;
   inset: 0;
+  z-index: 2;
   width: 100%;
-  height: auto;
-  padding: 10px 16px 16px 12px;
-  overflow-y: scroll;
+  height: 100%;
+  padding: 10px 10px 16px 12px;
+  overflow-y: auto;
   overscroll-behavior: contain;
   background: #ffffff;
   scrollbar-width: thin;
-  scrollbar-color: #cfd4dc transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  pointer-events: auto;
 }
 
 .candidate-list::-webkit-scrollbar,
 .translation-output::-webkit-scrollbar,
-.history-list::-webkit-scrollbar {
-  width: 10px;
+.history-list::-webkit-scrollbar,
+.entries-list::-webkit-scrollbar,
+.de-entry-list::-webkit-scrollbar,
+.code-editor::-webkit-scrollbar,
+.de-code-editor::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
 }
 
 .candidate-list::-webkit-scrollbar-track,
 .translation-output::-webkit-scrollbar-track,
-.history-list::-webkit-scrollbar-track {
+.history-list::-webkit-scrollbar-track,
+.entries-list::-webkit-scrollbar-track,
+.de-entry-list::-webkit-scrollbar-track,
+.code-editor::-webkit-scrollbar-track,
+.de-code-editor::-webkit-scrollbar-track {
   background: transparent;
+  margin: 4px 0;
 }
 
 .candidate-list::-webkit-scrollbar-thumb,
 .translation-output::-webkit-scrollbar-thumb,
-.history-list::-webkit-scrollbar-thumb {
-  min-height: 44px;
-  border: 3px solid #ffffff;
+.history-list::-webkit-scrollbar-thumb,
+.entries-list::-webkit-scrollbar-thumb,
+.de-entry-list::-webkit-scrollbar-thumb,
+.code-editor::-webkit-scrollbar-thumb,
+.de-code-editor::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 0;
   border-radius: 999px;
-  background: #cfd4dc;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
 }
 
 .candidate-list::-webkit-scrollbar-thumb:hover,
 .translation-output::-webkit-scrollbar-thumb:hover,
-.history-list::-webkit-scrollbar-thumb:hover {
-  background: #b7bec9;
+.history-list::-webkit-scrollbar-thumb:hover,
+.entries-list::-webkit-scrollbar-thumb:hover,
+.de-entry-list::-webkit-scrollbar-thumb:hover,
+.code-editor::-webkit-scrollbar-thumb:hover,
+.de-code-editor::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+.candidate-list::-webkit-scrollbar-corner,
+.translation-output::-webkit-scrollbar-corner,
+.history-list::-webkit-scrollbar-corner,
+.entries-list::-webkit-scrollbar-corner,
+.de-entry-list::-webkit-scrollbar-corner,
+.code-editor::-webkit-scrollbar-corner,
+.de-code-editor::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .candidate-row {
@@ -892,6 +928,9 @@ a:hover {
   cursor: pointer;
   padding: 10px 12px;
   text-align: left;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .candidate-item:hover,
@@ -1324,6 +1363,7 @@ a:hover {
 
 .tool-content {
   height: 100%;
+  min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1433,7 +1473,8 @@ a:hover {
 .de-body {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   min-height: 0;
   overflow: hidden;
@@ -1446,6 +1487,8 @@ a:hover {
   background: #fafbfc;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .dm-editor,
@@ -1457,6 +1500,7 @@ a:hover {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
   overflow: hidden;
   background: #ffffff;
 }
@@ -1475,9 +1519,9 @@ a:hover {
 
 .dm-edit-pane,
 .de-edit-pane {
+  position: relative;
   flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
+  display: block;
   gap: 0;
   padding: 0;
   min-width: 0;
@@ -1584,9 +1628,12 @@ a:hover {
 .entries-list,
 .de-entry-list {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   background: transparent;
   padding: 6px;
+  position: relative;
+  z-index: 1;
 }
 
 .entries-empty,
@@ -1605,7 +1652,7 @@ a:hover {
 
 .entries-list::-webkit-scrollbar,
 .de-entry-list::-webkit-scrollbar {
-  width: 8px;
+  width: var(--scrollbar-size);
 }
 
 .entries-list::-webkit-scrollbar-track,
@@ -1615,10 +1662,14 @@ a:hover {
 
 .entries-list::-webkit-scrollbar-thumb,
 .de-entry-list::-webkit-scrollbar-thumb {
-  background: #d7dbe2;
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  border: 0;
+}
+
+.entries-list::-webkit-scrollbar-thumb:hover,
+.de-entry-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 .entry-item,
@@ -1762,8 +1813,12 @@ a:hover {
 
 .code-editor,
 .de-code-editor {
-  flex: 1 1 0;
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 18px 20px;
@@ -1775,11 +1830,13 @@ a:hover {
   line-height: 1.65;
   color: #1f2328;
   overflow: auto;
+  overscroll-behavior: contain;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
   outline: none;
   resize: none;
+  box-sizing: border-box;
 }
 
 .code-editor:focus,
