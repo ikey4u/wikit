@@ -301,8 +301,32 @@ a:hover {
 }
 
 .language-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
   color: #9aa3af;
+  cursor: pointer;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.language-arrow:hover {
+  background: #f2f4f7;
+  color: #4b5563;
+}
+
+.language-arrow:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(151, 163, 179, 0.16);
+  color: #4b5563;
 }
 
 .translation-input,

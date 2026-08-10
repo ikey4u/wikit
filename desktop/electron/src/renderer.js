@@ -13,6 +13,7 @@ const translationOutput = document.getElementById('translationOutput')
 const translationHistoryList = document.getElementById('translationHistoryList')
 const sourceLanguageSelect = document.getElementById('sourceLanguageSelect')
 const targetLanguageSelect = document.getElementById('targetLanguageSelect')
+const swapLanguagesAction = document.getElementById('swapLanguagesAction')
 const activeModelLabel = document.getElementById('activeModelLabel')
 const dictSelect = document.getElementById('dictSelect')
 const searchInput = document.getElementById('searchInput')
@@ -120,7 +121,6 @@ let previewSocket = null
 let activeMode = 'translate'
 let currentTranslationSettings = null
 let latestTranslation = null
-let translationTimer = null
 let copyFeedbackTimer = null
 
 let currentTool = 'dict-maker'
@@ -206,7 +206,6 @@ function dmConfirm(message) {
 const translationHistoryKey = 'bootsmind-wikit.translation.history'
 const translationLanguageKey = 'bootsmind-wikit.translation.languages'
 const maxTranslationHistory = 50
-const translationDebounceDelay = 700
 const languageLabels = {
   auto: '自动检测',
   zh: '中文',
@@ -1295,7 +1294,19 @@ function loadTranslationLanguages() {
 
 function handleTranslationLanguageChange() {
   saveTranslationLanguages()
-  scheduleTranslation()
+}
+
+function swapTranslationLanguages() {
+  const previousSource = sourceLanguageSelect.value
+  const previousTarget = targetLanguageSelect.value
+  const nextSource = previousTarget
+  const nextTarget = previousSource === 'auto'
+    ? (previousTarget === 'en' ? 'zh' : 'en')
+    : previousSource
+
+  setCustomSelectValue(sourceLanguageSelect, nextSource)
+  setCustomSelectValue(targetLanguageSelect, nextTarget)
+  saveTranslationLanguages()
 }
 
 function initCustomSelects() {
@@ -1449,35 +1460,11 @@ function renderTranslationPlaceholder(message) {
   translationOutput.appendChild(placeholder)
 }
 
-function scheduleTranslation() {
-  if (activeMode !== 'translate') {
-    return
-  }
-  if (translationTimer) {
-    clearTimeout(translationTimer)
-  }
-  const text = translationInput.value.trim()
-  latestTranslation = Symbol('pending-translation')
-  translateAction.disabled = false
-  translateAction.textContent = '翻译'
-  if (!text) {
-    renderTranslationPlaceholder('输入文本后会自动翻译。')
-    return
-  }
-  translationTimer = setTimeout(() => {
-    requestTranslation()
-  }, translationDebounceDelay)
-}
-
 async function requestTranslation() {
-  if (translationTimer) {
-    clearTimeout(translationTimer)
-    translationTimer = null
-  }
   const text = translationInput.value.trim()
   if (!text) {
     latestTranslation = null
-    renderTranslationPlaceholder('输入文本后会自动翻译。')
+    renderTranslationPlaceholder('输入文本后按 Shift+Enter 翻译。')
     return
   }
 
@@ -1529,15 +1516,11 @@ async function requestTranslation() {
 }
 
 function clearTranslation() {
-  if (translationTimer) {
-    clearTimeout(translationTimer)
-    translationTimer = null
-  }
   latestTranslation = null
   translateAction.disabled = false
   translateAction.textContent = '翻译'
   translationInput.value = ''
-  renderTranslationPlaceholder('输入文本后会自动翻译。')
+  renderTranslationPlaceholder('输入文本后按 Shift+Enter 翻译。')
   translationInput.focus()
 }
 
@@ -1634,11 +1617,11 @@ settingsButton.addEventListener('click', openSettingsWindow)
 openTranslationSettings.addEventListener('click', openSettingsWindow)
 translateAction.addEventListener('click', requestTranslation)
 clearTranslationAction.addEventListener('click', clearTranslation)
-translationInput.addEventListener('input', scheduleTranslation)
+swapLanguagesAction.addEventListener('click', swapTranslationLanguages)
 sourceLanguageSelect.addEventListener('change', handleTranslationLanguageChange)
 targetLanguageSelect.addEventListener('change', handleTranslationLanguageChange)
-document.addEventListener('keydown', (event) => {
-  if (activeMode !== 'translate' || event.key !== 'Enter') {
+translationInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') {
     return
   }
   if (event.metaKey || event.ctrlKey) {
@@ -1646,8 +1629,19 @@ document.addEventListener('keydown', (event) => {
     copyTranslationOutput().catch(() => {})
     return
   }
-  const target = event.target
-  if (target !== translationInput && !event.altKey && !event.shiftKey) {
+  if (event.shiftKey) {
+    event.preventDefault()
+    requestTranslation()
+  }
+})
+document.addEventListener('keydown', (event) => {
+  if (activeMode !== 'translate' || event.key !== 'Enter') {
+    return
+  }
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+    return
+  }
+  if (event.target !== translationInput) {
     event.preventDefault()
     translationInput.focus()
   }

@@ -54,7 +54,7 @@
                     <button class="select-option" type="button" role="option" data-value="ko">한국어</button>
                   </div>
                 </div>
-                <span class="language-arrow">→</span>
+                <button id="swapLanguagesAction" class="language-arrow" type="button" title="交换语言" aria-label="交换源语言和目标语言">⇄</button>
                 <div class="custom-select language-picker">
                   <input id="targetLanguageSelect" type="hidden" value="zh">
                   <button class="select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
@@ -77,7 +77,7 @@
               </div>
               <textarea id="translationInput" class="translation-input" spellcheck="false" placeholder="输入要翻译的文本"></textarea>
               <div id="translationOutput" class="translation-output" tabindex="0">
-                <div class="output-placeholder">输入文本后会自动翻译。</div>
+                <div class="output-placeholder">输入文本后按 Shift+Enter 翻译。</div>
               </div>
               <section class="history-panel" aria-label="Translation history">
                 <div class="history-head">
