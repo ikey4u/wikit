@@ -57,11 +57,19 @@ jobs:
           key: nsh-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_REVISION }}
       - name: Install matching NSH CLI
         if: steps.nsh.outputs.cache-hit != 'true'
-        run: cargo install --git https://github.com/longbridge/nsh --rev "$NSH_REVISION" --locked nsh-cli
+        run: CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 cargo install --git https://github.com/longbridge/nsh --rev "$NSH_REVISION" --locked nsh-cli
       - name: Test shared Rust business logic
         run: cargo test --manifest-path client/Cargo.toml --locked -p wikit-client-native
       - name: Check native bindings and interface
         run: nsh check client/${{ matrix.entry }}
+      - name: Build matching Android host runtime
+        if: runner.os == 'Linux'
+        run: |
+          cargo metadata --format-version 1 --manifest-path client/native/Cargo.toml > "$RUNNER_TEMP/wikit-metadata.json"
+          nsh_source=$(python3 -c 'import json,pathlib,sys; data=json.load(open(sys.argv[1])); pkg=next(p for p in data["packages"] if p["name"]=="nsh-core"); print(pathlib.Path(pkg["manifest_path"]).parents[2])' "$RUNNER_TEMP/wikit-metadata.json")
+          cargo run --manifest-path "$nsh_source/Cargo.toml" -p xtask -- android --release --abi arm64-v8a
+          test -f "$nsh_source/target/android/release/classes.dex"
+          echo "NSH_RUNTIME=$nsh_source/target" >> "$GITHUB_ENV"
       - name: Build Android APK
         if: runner.os == 'Linux'
         run: |

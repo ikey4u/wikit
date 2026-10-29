@@ -60,6 +60,10 @@ The three configurations use the existing app identity `com.zhqli.wikit`.
 generated native bindings. It does not cross-compile or link the iOS/Android/macOS
 application. Use the platform run/package commands on a machine with the required
 SDK to verify native rendering, resource loading and device integration.
+A source-only `cargo install nsh-cli` does not install the Android Java runtime.
+Build the matching NSH checkout with `cargo xtask android --release --abi arm64-v8a`
+and set `NSH_RUNTIME` to that checkout's `target` directory before Android packaging.
+The test-release workflow performs this step automatically.
 The Native clients workflow runs the Rust tests, three entry checks and headless
 UI tests on Linux; platform package signing is not part of that workflow.
 
