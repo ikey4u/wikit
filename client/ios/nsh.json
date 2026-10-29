@@ -1,0 +1,29 @@
+{
+  "name": "Wikit",
+  "id": "com.zhqli.wikit",
+  "appearance": "system",
+  "rust": "../native",
+  "capabilities": {
+    "network": {
+      "hosts": [
+        "*"
+      ]
+    },
+    "webview": {
+      "hosts": [
+        "*"
+      ]
+    },
+    "fs": {
+      "read": [
+        "${dataDir}"
+      ],
+      "write": [
+        "${dataDir}"
+      ]
+    }
+  },
+  "icon": "../shared/icon.png",
+  "version": "0.6.0",
+  "build": 20261029
+}

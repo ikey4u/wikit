@@ -1,0 +1,111 @@
+name: Native test release
+
+on:
+  push:
+    tags: ['v*-test.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NSH_REVISION: e40afd54cd0ca18707bc94ec836bd4eb4b977a75
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            os: macos-15
+            entry: desktop
+          - platform: android-arm64
+            os: ubuntu-24.04
+            entry: android
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            client -> target
+            client/${{ matrix.entry }} -> target
+          key: native-release-${{ matrix.platform }}
+      - name: Install Android build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.1" "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          rustup target add aarch64-linux-android
+      - uses: actions/setup-java@v4
+        if: runner.os == 'Linux'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Cache matching NSH CLI
+        id: nsh
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/nsh
+          key: nsh-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_REVISION }}
+      - name: Install matching NSH CLI
+        if: steps.nsh.outputs.cache-hit != 'true'
+        run: cargo install --git https://github.com/longbridge/nsh --rev "$NSH_REVISION" --locked nsh-cli
+      - name: Test shared Rust business logic
+        run: cargo test --manifest-path client/Cargo.toml --locked -p wikit-client-native
+      - name: Check native bindings and interface
+        run: nsh check client/${{ matrix.entry }}
+      - name: Build Android APK
+        if: runner.os == 'Linux'
+        run: |
+          nsh package client/android --target android --abi arm64-v8a --out "$RUNNER_TEMP/wikit-package"
+          mkdir -p artifacts
+          cp "$RUNNER_TEMP/wikit-package/Wikit.apk" artifacts/wikit-${GITHUB_REF_NAME}-android-arm64.apk
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose artifacts/*.apk
+          "$ANDROID_HOME/build-tools/35.0.1/aapt" dump badging artifacts/*.apk
+      - name: Build macOS application
+        if: runner.os == 'macOS'
+        run: |
+          test "$(uname -m)" = arm64
+          nsh package client/desktop --target macos --out "$RUNNER_TEMP/wikit-package"
+          codesign --verify --deep --strict "$RUNNER_TEMP/wikit-package/Wikit.app"
+          file "$RUNNER_TEMP/wikit-package/Wikit.app/Contents/MacOS/"*
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/wikit-package/Wikit.app" "artifacts/wikit-${GITHUB_REF_NAME}-macos-arm64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: artifacts/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish test release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        working-directory: artifacts
+        run: sha256sum *.apk *.zip > SHA256SUMS.txt
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title "Wikit NSH 测试版 $GITHUB_REF_NAME" \
+            --notes-file client/RELEASE_NOTES.md

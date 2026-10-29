@@ -1,0 +1,6 @@
+[workspace]
+resolver = "3"
+members = ["native"]
+
+[workspace.dependencies]
+nsh-core = { git = "https://github.com/longbridge/nsh", rev = "e40afd54cd0ca18707bc94ec836bd4eb4b977a75" }

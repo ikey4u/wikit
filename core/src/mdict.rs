@@ -10,6 +10,7 @@ use std::io::{Read, BufReader, Write, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
 use std::path::{Path};
 
+#[cfg(feature = "database")]
 use sqlx::postgres::PgPoolOptions;
 use nom::number::streaming::{be_u32, le_u32};
 use nom::{regex, do_parse, tuple, map_res, take, count, take_until, pair, cond};
@@ -828,6 +829,7 @@ pub fn create_mdx<P: AsRef<Path>>(title: &str, author: &str, description: &str, 
     Ok(())
 }
 
+#[cfg(feature = "database")]
 pub async fn save_into_db(dict: Vec<(String, String)>, dburl: &str, table: &str) -> AnyResult<()> {
     let pool = PgPoolOptions::new().max_connections(5).connect(dburl).await?;
     sqlx::query(format!("CREATE TABLE IF NOT EXISTS {} (word TEXT UNIQUE, meaning TEXT)", table).as_str()).execute(&pool).await?;

@@ -6,13 +6,19 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["server", "database", "preview"]
+server = ["dep:rocket"]
+database = ["dep:sqlx", "dep:async-std", "dep:openssl"]
+preview = ["dep:axum", "dep:tokio", "dep:tower-http", "dep:tower", "dep:notify", "dep:rusqlite", "dep:http", "dep:headers"]
+
 [dependencies]
 adler = "1.0.1"
 compress = "0.2.1"
-async-std = { version = "1.6", features = [ "attributes" ] }
-sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres" ] }
+async-std = { version = "1.6", features = [ "attributes" ], optional = true }
+sqlx = { version = "0.5", features = [ "runtime-async-std-native-tls", "postgres" ], optional = true }
 futures = "0.3.8"
-rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "91e3b4397a1637d0f55f23db712cf7bda0c7f891", features = ["json"] }
+rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "91e3b4397a1637d0f55f23db712cf7bda0c7f891", features = ["json"], optional = true }
 tera = "1"
 serde = "1.0"
 serde_derive = "1.0"
@@ -28,6 +34,7 @@ encoding_rs = "0.8.28"
 chrono = "0.4"
 dialoguer = "0.8.0"
 indicatif = "0.16.2"
+console = { version = "0.16", features = ["std"] }
 thiserror = "1.0.30"
 fst = { version = "0.4", features = ["levenshtein"] }
 memmap = "0.7.0"
@@ -35,22 +42,23 @@ toml = "0.5.8"
 url = "2.2.2"
 md-5 = "0.9.1"
 hex = "0.4"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 json5 = "0.4.1"
-tokio = { version = "1.0", features = ["full"] }
-axum = { version = "0.5", features = [ "headers", "ws" ] }
-tower-http = { version = "0.2", features = ["fs", "cors"] }
-tower = "0.4"
+tokio = { version = "1.0", features = ["full"], optional = true }
+axum = { version = "0.5", features = [ "headers", "ws" ], optional = true }
+tower-http = { version = "0.2", features = ["fs", "cors"], optional = true }
+tower = { version = "0.4", optional = true }
 tempfile = "3"
-rusqlite = { version = "0.27.0", features = ["bundled"] }
-notify = "4.0"
-http = "0.2"
-headers = "0.3"
+rusqlite = { version = "0.27.0", features = ["bundled"], optional = true }
+notify = { version = "4.0", optional = true }
+http = { version = "0.2", optional = true }
+headers = { version = "0.3", optional = true }
 wikit-proto = { path = "../proto" }
 log = "0.4"
-# indirect dependencies, but build using source when target is android
-openssl = { version = "0.10", features = ["vendored"] }
+# Legacy database TLS builds keep the original vendored OpenSSL behavior.
+openssl = { version = "0.10", features = ["vendored"], optional = true }
 
+# nom 6.2 caps memchr below 2.4, incompatible with current pest.
 [dependencies.nom]
-version = "6"
+version = "=6.1.2"
 features = ["regexp"]

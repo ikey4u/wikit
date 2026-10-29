@@ -41,6 +41,7 @@ pub enum WikitError {
     #[error("json5 error")]
     JSON5Error(#[from] json5::Error),
 
+    #[cfg(feature = "preview")]
     #[error("{0}")]
     SQLiteError(#[from] rusqlite::Error),
 }

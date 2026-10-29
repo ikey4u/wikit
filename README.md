@@ -7,6 +7,10 @@
 
 <hr/>
 
+The new macOS, iOS and Android GUI clients are built with Native Shell (NSH)
+and share a Rust native core. See [client/README.md](client/README.md) for setup,
+run and packaging commands. The older Tauri and Android trees below are legacy.
+
 wikit contains the following components
 
 - Wikit CLI
