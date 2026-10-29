@@ -21,8 +21,8 @@ mise exec -- scripts/wikit.sh package desktop
 macOS requires macOS 14+ and Xcode command-line tools. iOS requires a Mac with
 Xcode and a simulator or configured signing for a device. Android requires Android
 9+ on the device; run `mise run setup:android` for SDK 35 and NDK 27, and connect a
-device/emulator. Export `ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018` when
-building outside GitHub Actions. `mise run build:android-runtime` prepares the
+device/emulator. `mise exec` and mise tasks provide `ANDROID_HOME` automatically;
+the runtime builder discovers the installed NDK. `mise run build:android-runtime` prepares the
 matching NSH runtime and prints the `NSH_RUNTIME` path to export before packaging.
 The root `patches/nsh-android-tokens.patch` is applied idempotently by this task.
 

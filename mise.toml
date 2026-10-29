@@ -5,6 +5,7 @@ rust = "1.99.1"
 gh = "2.83.2"
 python = "3.13.9"
 java = "temurin-17.0.17+10"
+android-sdk = "19.0"
 "cargo:https://github.com/longbridge/nsh" = { version = "rev:e40afd54cd0ca18707bc94ec836bd4eb4b977a75", crate = "nsh-cli", locked = true, install_env = { CARGO_PROFILE_RELEASE_LTO = "false", CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16" } }
 
 [tasks.check]
@@ -46,8 +47,6 @@ run = "python scripts/release.py publish"
 [tasks."setup:android"]
 description = "Install Android SDK/NDK through mise and sdkmanager"
 run = "scripts/setup-android.sh"
-[tasks."setup:android".tools]
-android-sdk = "19.0"
 
 [tasks."build:android-runtime"]
 description = "Build the pinned NSH Android runtime with the compatibility patch"

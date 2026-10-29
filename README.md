@@ -22,7 +22,7 @@ mise run test
 mise run check:native
 ```
 
-`mise.toml` pins Rust, Python, Java, GitHub CLI and the exact NSH CLI revision.
+`mise.toml` pins Rust, Python, Java, Android SDK tools, GitHub CLI and the exact NSH CLI revision.
 `mise.lock` records downloadable tool metadata for Linux x64 and macOS ARM64.
 Run tasks through mise, or prefix individual commands with `mise exec --`.
 Platform SDKs still require their platform: macOS/iOS builds need Xcode on a Mac;

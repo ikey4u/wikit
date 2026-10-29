@@ -15,7 +15,7 @@ if check.returncode == 0:
     subprocess.run(["git", "-C", str(source), "apply", str(patch)], check=True)
 else:
     subprocess.run(["git", "-C", str(source), "apply", "--reverse", "--check", str(patch)], check=True)
-subprocess.run(["cargo", "run", "--manifest-path", str(source / "Cargo.toml"), "-p", "xtask", "--", "android", "--release", "--abi", "arm64-v8a"], check=True)
+subprocess.run(["cargo", "run", "--locked", "--manifest-path", str(source / "Cargo.toml"), "-p", "xtask", "--", "android", "--release", "--abi", "arm64-v8a"], check=True)
 runtime = source / "target"
 if not (runtime / "android/release/classes.dex").is_file():
     raise SystemExit("NSH Android runtime is missing classes.dex")
