@@ -117,5 +117,5 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" artifacts/* \
             --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
-            --title "Wikit NSH 测试版 $GITHUB_REF_NAME" \
+            --title "Wikit Preview $GITHUB_REF_NAME" \
             --notes-file client/RELEASE_NOTES.md

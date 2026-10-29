@@ -1,12 +1,32 @@
-Wikit GUI 基于 Native Shell (NSH) 重写的测试版本，业务与文件存储由 Rust 实现。
+Wikit's redesigned native dictionary interface is now available for testing.
 
-- Android：Android 9+，ARM64，下载 `.apk` 安装。
-- macOS：macOS 14+，Apple Silicon，下载 `.zip` 解压后打开 Wikit.app。
-- 支持本地/远程词典查询、词典导入、收藏、查询历史、学习笔记、外观切换与 HTML 页面预览。
-- 附带 SHA256SUMS.txt，可核对下载文件的 SHA-256。
+## What's new
 
-安装说明：Android 使用测试签名，无法覆盖安装签名不同的旧版；macOS 使用临时签名且未经 Apple 公证，首次启动可能需要在“系统设置 → 隐私与安全性”允许打开。
+- A quieter forest-green visual system with refined light and dark themes.
+- A focused lookup and reading layout, with recent words ready to revisit.
+- A compact desktop sidebar and four primary destinations in mobile bottom navigation.
+- Clear first-use guidance, helpful empty collections, and recovery for searches without results.
+- Separate flows for importing a dictionary file and connecting a Wikit server.
+- English interface defaults across macOS, iOS, and Android. Dictionary content and personal notes keep their original language.
 
-已知限制：移动端暂不提供系统文件选择器，可使用下载 URL 或可访问的沙箱路径导入 .wikit 文件；导入不会自动复制文件旁的外部媒体目录。iOS 不包含在本次发布中。
+Local and remote lookup, favorites, search history, study notes, appearance settings, and HTML preview remain available.
 
-这是预发布测试版，请通过 GitHub Issues 反馈问题。每个发布标签都对应 Actions 构建使用的源码提交。
+## Downloads
+
+- **Android:** Android 9 or later, ARM64. Download and install the `.apk` file.
+- **macOS:** macOS 14 or later, Apple Silicon. Download the `.zip`, extract it, and open `Wikit.app`.
+- **Checksums:** Use `SHA256SUMS.txt` to verify the SHA-256 hashes of the downloads.
+
+## Installation notes
+
+The Android package uses a test signing key and cannot replace an installation signed with a different key. The macOS application is ad-hoc signed and is not notarized by Apple; the first launch may require allowing it in **System Settings > Privacy & Security**.
+
+## Known limitations and verification
+
+- Mobile system file picking is not available yet. Import using a download URL or an accessible sandbox path.
+- Importing a standalone `.wikit` file does not copy adjacent external media directories.
+- Dictionary-provided HTML retains its original styling, including in dark mode.
+- iOS source checks pass, but an iOS installation package is not included in this release.
+- Shared UI checks pass for all three clients, and five headless interaction tests pass. Headless tests do not certify native rendering, persisted data, or real-device behavior. Native visual and device acceptance testing remains outstanding.
+
+This is a prerelease for testing. Please report issues through GitHub Issues. The release tag identifies the exact source commit used to build these packages.
