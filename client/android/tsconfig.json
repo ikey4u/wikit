@@ -2,7 +2,7 @@
   "extends": "./.nsh/tsconfig.json",
   "include": [
     "App.tsx",
-    "../shared/**/*.tsx",
+    "../nsh/**/*.tsx",
     ".nsh/types/nsh/globals.d.ts"
   ]
 }

@@ -75,3 +75,17 @@ test("empty collections guide setup and navigation adapts on resize", async () =
   await app.press("label:Search");
   await app.waitFor("Your dictionary starts here");
 });
+
+
+test("desktop sidebar expands and search shortcut returns to lookup", async () => {
+  const app = await open("./App.tsx", { width: 1100, height: 760, platform: "macos" });
+  await app.waitFor("Your dictionary starts here");
+  await app.press("label:Expand sidebar");
+  expect(app.shows("Wikit")).toBe(true);
+  await app.press("label:Notes");
+  await app.waitFor("Study notes");
+  await app.keyboard.press("mod+f");
+  await app.waitFor("Your dictionary starts here");
+  await app.press("label:Collapse sidebar");
+  expect(app.shows("Expand sidebar")).toBe(true);
+});

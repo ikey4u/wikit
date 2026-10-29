@@ -1,33 +1,32 @@
-name: Native clients
-
+name: Workspace validation
 on:
   pull_request:
     branches: [master]
-    paths: ['client/**', 'core/**', 'proto/**', '.github/workflows/native-clients.yml']
   push:
     branches: [master]
-    paths: ['client/**', 'core/**', 'proto/**', '.github/workflows/native-clients.yml']
   workflow_dispatch:
-
+permissions:
+  contents: read
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - name: Use stable Rust
-        run: rustup update stable && rustup default stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: jdx/mise-action@v5
         with:
-          workspaces: client -> target
-      - name: Test shared native logic
-        run: cargo test --manifest-path client/Cargo.toml --locked -p wikit-client-native
-      - name: Install the matching NSH CLI
-        run: CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 cargo install --git https://github.com/longbridge/nsh --rev e40afd54cd0ca18707bc94ec836bd4eb4b977a75 --locked nsh-cli
-      - name: Check all three application entries
+          version: 2026.10.4
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate alpha versions
+        run: mise run release:check
+      - name: Check workspace formatting
+        run: mise exec -- cargo fmt --all -- --check
+      - name: Test workspace and native interaction
+        run: mise run test
+      - name: Check all native entries
+        run: mise run check:native
+      - name: Build tools and run terminal/server smoke tests
         run: |
-          nsh check client/desktop
-          nsh check client/ios
-          nsh check client/android
-      - name: Test shared native screens
-        run: nsh test client/desktop
+          mise exec -- cargo build --locked -p wikit -p wikit-server -p wikit-tui
+          mise exec -- python scripts/smoke.py

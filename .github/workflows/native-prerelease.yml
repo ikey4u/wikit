@@ -1,18 +1,31 @@
-name: Native test release
-
+name: Alpha release
 on:
   push:
-    tags: ['v*-test.*']
+    tags: ['v*-alpha.*']
   workflow_dispatch:
-
 permissions:
   contents: read
-
 env:
   CARGO_TERM_COLOR: always
-  NSH_REVISION: e40afd54cd0ca18707bc94ec836bd4eb4b977a75
-
 jobs:
+  validate:
+    name: Validate workspace
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.10.4
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate alpha versions
+        run: mise run release:check
+      - name: Test all workspace packages and native screens
+        run: mise run test
+      - name: Check iOS source entry
+        run: mise exec -- nsh check client/ios
+
   build:
     name: Build ${{ matrix.platform }}
     strategy:
@@ -29,66 +42,30 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.10.4
+          cache: true
+          cache_save_post: true
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            client -> target
+            . -> target
             client/${{ matrix.entry }} -> target
-          key: native-release-${{ matrix.platform }}
-      - name: Install Android build tools
+          key: alpha-${{ matrix.platform }}
+      - name: Validate tag and application versions
+        if: startsWith(github.ref, 'refs/tags/')
+        run: mise exec -- python scripts/release.py check --tag "$GITHUB_REF_NAME"
+      - name: Install Android SDK and NDK with mise
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang libclang-dev
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.1" "ndk;27.2.12479018"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          rustup target add aarch64-linux-android
-      - uses: actions/setup-java@v4
-        if: runner.os == 'Linux'
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Cache matching NSH CLI
-        id: nsh
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/nsh
-          key: nsh-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_REVISION }}
-      - name: Install matching NSH CLI
-        if: steps.nsh.outputs.cache-hit != 'true'
-        run: CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 cargo install --git https://github.com/longbridge/nsh --rev "$NSH_REVISION" --locked nsh-cli
-      - name: Test shared Rust business logic
-        run: cargo test --manifest-path client/Cargo.toml --locked -p wikit-client-native
+        run: mise run setup:android
       - name: Check native bindings and interface
-        run: nsh check client/${{ matrix.entry }}
+        run: mise exec -- nsh check client/${{ matrix.entry }}
       - name: Build matching Android host runtime
         if: runner.os == 'Linux'
-        run: |
-          cargo metadata --format-version 1 --manifest-path client/native/Cargo.toml > "$RUNNER_TEMP/wikit-metadata.json"
-          nsh_source=$(python3 -c 'import json,pathlib,sys; data=json.load(open(sys.argv[1])); pkg=next(p for p in data["packages"] if p["name"]=="nsh-core"); print(pathlib.Path(pkg["manifest_path"]).parents[2])' "$RUNNER_TEMP/wikit-metadata.json")
-          git -C "$nsh_source" apply --check "$GITHUB_WORKSPACE/client/patches/nsh-android-tokens.patch"
-          git -C "$nsh_source" apply "$GITHUB_WORKSPACE/client/patches/nsh-android-tokens.patch"
-          cargo run --manifest-path "$nsh_source/Cargo.toml" -p xtask -- android --release --abi arm64-v8a
-          test -f "$nsh_source/target/android/release/classes.dex"
-          echo "NSH_RUNTIME=$nsh_source/target" >> "$GITHUB_ENV"
-      - name: Build Android APK
-        if: runner.os == 'Linux'
-        run: |
-          nsh package client/android --target android --abi arm64-v8a --out "$RUNNER_TEMP/wikit-package"
-          mkdir -p artifacts
-          cp "$RUNNER_TEMP/wikit-package/Wikit.apk" artifacts/wikit-${GITHUB_REF_NAME}-android-arm64.apk
-          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose artifacts/*.apk
-          "$ANDROID_HOME/build-tools/35.0.1/aapt" dump badging artifacts/*.apk
-      - name: Build macOS application
-        if: runner.os == 'macOS'
-        run: |
-          test "$(uname -m)" = arm64
-          nsh package client/desktop --target macos --out "$RUNNER_TEMP/wikit-package"
-          codesign --verify --deep --strict "$RUNNER_TEMP/wikit-package/Wikit.app"
-          file "$RUNNER_TEMP/wikit-package/Wikit.app/Contents/MacOS/"*
-          mkdir -p artifacts
-          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/wikit-package/Wikit.app" "artifacts/wikit-${GITHUB_REF_NAME}-macos-arm64.zip"
+        run: mise run build:android-runtime
+      - name: Build and verify release packages
+        run: mise exec -- python scripts/package-release.py ${{ matrix.platform }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
@@ -96,26 +73,23 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish test release
+    name: Publish alpha release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, validate]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.10.4
+          install_args: python gh
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
-      - name: Generate checksums
-        working-directory: artifacts
-        run: sha256sum *.apk *.zip > SHA256SUMS.txt
-      - name: Create GitHub prerelease
+      - name: Create verified English alpha release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" artifacts/* \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
-            --title "Wikit Preview $GITHUB_REF_NAME" \
-            --notes-file client/RELEASE_NOTES.md
+        run: python scripts/publish-release.py

@@ -1,4 +1,4 @@
 import { mount } from "nsh";
-import { App } from "../shared/App";
+import { App } from "../nsh/App";
 
 mount(App);

@@ -36,3 +36,10 @@ release
 
 /target
 .idea
+
+# Local implementation plans and review artifacts
+/inner/
+
+# Generated native hosts and release packages
+**/.nsh/
+/artifacts/

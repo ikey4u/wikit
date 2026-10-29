@@ -13,9 +13,14 @@ macos-design skill's composition, interaction and visual guidance. Reviewed on
 2026-10-29. The Impeccable context launcher was unavailable; product context was
 read directly from the repository. Neither skill is an application dependency.
 
+The `next` Electron implementation informed the compact navigation rail, direct
+dictionary switching and reading history controls. These are implemented with
+native NSH controls rather than restoring the retired Electron application.
+
 ## Composition
 
-Desktop has a 208-point quiet sidebar. Search, Favorites, History and Notes sit
+Desktop starts with a quiet 64-point icon sidebar, expandable to 208 points.
+Every compact navigation item has an accessible label and tooltip. Search, Favorites, History and Notes sit
 above a separated pair of Library and Preview tools. The wordmark uses native
 text without a decorative icon tile. A light 56-point toolbar provides orientation
 and work-in-progress feedback; platform window chrome remains native.
@@ -32,8 +37,9 @@ Horizontal padding is 40 points on desktop and 20 on smaller screens.
 
 Without a dictionary, show a focused setup invitation and one Add dictionary
 action. Hide the unusable search field and dictionary filters. With dictionaries,
-show the search field first, then a horizontally scrollable dictionary selection
-with a thin active underline. Search stays disabled until a query and dictionary
+show the search field first, then a searchable native dictionary selector.
+Back and forward controls revisit up to 50 definitions in the current reading
+session without repeating the network request. Search stays disabled until a query and dictionary
 are available. Return submits the query; the toolbar indicates loading.
 
 Before a search, show up to five actual recent words for easy continuation. Never
@@ -74,7 +80,8 @@ cards, gradients, shadows, marketing panels and fake example data.
 
 Retain English defaults across the three clients. Dictionary content and authored
 notes retain their language. Command/Control + 1–6 switches pages; Command/Control
-+ S saves notes; Return submits search or source entry. Success feedback clears
++ S saves notes; Command/Control + F returns to and focuses search; Alt + Left/Right
+revisits definitions. Return submits search or source entry. Success feedback clears
 after 3.5 seconds; errors persist until another action starts.
 
 ## Verification boundaries

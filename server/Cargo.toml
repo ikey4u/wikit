@@ -1,0 +1,20 @@
+[package]
+name = "wikit-server"
+version.workspace = true
+edition.workspace = true
+publish = false
+[dependencies]
+wikit-base.workspace = true
+wikit-proto.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+tokio.workspace = true
+axum = "0.8"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+mime_guess = "2"
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

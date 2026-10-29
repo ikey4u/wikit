@@ -1,0 +1,64 @@
+[package]
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Dictionary parsing, indexing and lookup for Wikit"
+name = "wikit-base"
+version.workspace = true
+authors = ["ikey4u <pwnkeeper@gmail.com>"]
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+database = ["dep:sqlx", "dep:async-std"]
+preview = ["dep:axum", "dep:tokio", "dep:tower-http", "dep:tower", "dep:notify", "dep:rusqlite", "dep:http", "dep:headers"]
+
+[dependencies]
+adler = "1.0.1"
+compress = "0.2.1"
+async-std = { version = "1.6", features = [ "attributes" ], optional = true }
+sqlx = { version = "0.5", features = [ "runtime-async-std-rustls", "postgres" ], optional = true }
+futures = "0.3.8"
+tera = "1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+ripemd128 = "0.1.2"
+clap = "2"
+regex = "1"
+anyhow = "1.0.38"
+dirs = "3.0.2"
+once_cell = "1.9.0"
+minilzo-rs = "0.6.0"
+encoding_rs = "0.8.28"
+chrono = "0.4"
+dialoguer = "0.8.0"
+indicatif = "0.16.2"
+console = { version = "0.16", features = ["std"] }
+thiserror = "1.0.30"
+fst = { version = "0.4", features = ["levenshtein"] }
+memmap = "0.7.0"
+toml = "0.5.8"
+url = "2.2.2"
+md-5 = "0.9.1"
+hex = "0.4"
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+json5 = "0.4.1"
+tokio = { version = "1.0", features = ["full"], optional = true }
+axum = { version = "0.5", features = [ "headers", "ws" ], optional = true }
+tower-http = { version = "0.2", features = ["fs", "cors"], optional = true }
+tower = { version = "0.4", optional = true }
+tempfile = "3"
+rusqlite = { version = "0.27.0", features = ["bundled"], optional = true }
+notify = { version = "4.0", optional = true }
+http = { version = "0.2", optional = true }
+headers = { version = "0.3", optional = true }
+wikit-proto.workspace = true
+log = "0.4"
+
+# nom 6.2 caps memchr below 2.4, incompatible with current pest.
+[dependencies.nom]
+version = "=6.1.2"
+features = ["regexp"]

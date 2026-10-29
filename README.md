@@ -1,113 +1,101 @@
-<p align="center">
-  <img src="https://github.com/ikey4u/wikit/blob/master/desktop/tauri/icons/128x128@2x.png?raw=true" alt="Wikit Application Icon"/>
-</p>
-<p align="center">
-  Wikit is a free and open-source dictionary program that enable you translate word for different languages
-</p>
+<p align="center"><img src="client/nsh/icon.png" width="96" alt="Wikit" /></p>
 
-<hr/>
+# Wikit
 
-The new macOS, iOS and Android GUI clients are built with Native Shell (NSH)
-and share a Rust native core. See [client/README.md](client/README.md) for setup,
-run and packaging commands. The older Tauri and Android trees below are legacy.
+A dictionary toolkit for reading, building and serving dictionaries. Wikit combines
+native macOS/iOS/Android clients, a UTF-8 terminal client, an HTTP server and reusable
+Rust libraries in one Cargo workspace.
 
-wikit contains the following components
+Wikit 0.6.0 is an **alpha**. Releases follow SemVer (`0.6.0-alpha.1`,
+`0.6.0-alpha.2`, …), with matching `v`-prefixed Git tags. Downloads and release notes
+are on [GitHub Releases](https://github.com/ikey4u/wikit/releases).
 
-- Wikit CLI
+## Develop
 
-    A CLI tool which can be used to create wikit dictionary from plain text or other dictionary format.
+Install [mise](https://mise.jdx.dev/getting-started.html), then:
 
-- Wikit Desktop
+```sh
+mise trust
+mise install
+mise run check
+mise run test
+mise run check:native
+```
 
-    Desktop application for Windows, Linux and MacOS which is developed using [tauri](https://tauri.studio/en/) and [yew](https://yew.rs/).
+`mise.toml` pins Rust, Python, Java, GitHub CLI and the exact NSH CLI revision.
+`mise.lock` records downloadable tool metadata for Linux x64 and macOS ARM64.
+Run tasks through mise, or prefix individual commands with `mise exec --`.
+Platform SDKs still require their platform: macOS/iOS builds need Xcode on a Mac;
+`mise run setup:android` installs the Android SDK/NDK using the mise-managed SDK.
+A C/C++ linker and normal OS build libraries are host prerequisites.
 
-    ![wikit main screen](./docs/imgs/wikit-main-screen.jpg "wikit main screen")
+## Use
 
-- Wikit Mobile
+```sh
+# Build a dictionary (source can be .txt or .mdx)
+mise run cli -- dict --create dictionary.txt --output dictionary.wikit
 
-    Mobile application for Android, it's under planning.
+# Interactive terminal dictionary, including over SSH
+mise run tui -- --dictionary dictionary.wikit
 
-# Installation and Usage
+# One-shot text output for Vim, Emacs or pipes; --json returns word/HTML pairs
+mise run tui -- --dictionary dictionary.wikit hello
 
-You can download Wikit CLI and Wikit Desktop from [Release](https://github.com/ikey4u/wikit/releases) page.
+# Serve one or more local dictionaries
+mise run server -- --dictionary dictionary.wikit --listen 127.0.0.1:8888
 
-To install dictionary, see [Wikit Introduction](https://github.com/ikey4u/wikit/wiki) for detail.
+# Query that server from a terminal
+mise run tui -- --server http://127.0.0.1:8888 hello
 
-For Linux user, you can create a file in path `~/.local/share/applications/com.zhqli.wikit.desktop`
-(create if the path does not exist) with the following content:
+# Native desktop on macOS
+mise run desktop
+```
 
-    #!/usr/bin/env xdg-open
+Native apps can connect to the server's base URL in Library. See the
+[native client guide](client/README.md), [TUI guide](client/tui/README.md),
+[server guide](server/README.md), and [CSS/JS resource guide](docs/resources.md).
 
-    [Desktop Entry]
-    Name=Wikit Desktop
-    Comment=A universal dictionary
-    Path=/path/to/wikit
-    Exec=/path/to/wikit/wikit-desktop.AppImage 
-    Terminal=false
-    Type=Application
-    Categories=Utility;
-    Keywords=dictionary;dict;
+## Repository
 
-You should change `Path` and  `Exec` to your own, and run `update-desktop-database`
+| Directory | Purpose |
+| --- | --- |
+| `crates/wikit-base` | MDX/Wikit parsing, reusable index and lookup API |
+| `crates/wikit-proto` | Shared serializable protocol types |
+| `crates/wikit-client` | Native bridge and persisted client business logic |
+| `client/nsh` | Shared NSH native interface and assets |
+| `client/desktop`, `client/ios`, `client/android` | Native platform entries |
+| `client/tui` | Interactive and one-shot terminal dictionary |
+| `server` | Standalone HTTP service |
+| `tools/cli` | Dictionary creation and conversion CLI |
+| `scripts` | All project maintenance/build/release scripts |
+| `patches` | Patches for pinned third-party dependencies |
 
-    update-desktop-database ~/.local/share/applications
+The root `Cargo.toml` and `Cargo.lock` manage every Rust package. NSH-generated
+`.nsh` build projects and `target` directories are disposable and ignored.
+The old root Android and Tauri implementations have been removed; Git history
+retains them. `wikit server --start` is replaced by the dedicated `wikit-server`.
 
-after that you can open wikit desktop from your dash.                               
+## Embed the library
 
-If you are bother with the manual installation on linux, you can install it from
-[flathub](https://flathub.org/apps/details/com.zhqli.wikit).
+See [wikit-base](crates/wikit-base/README.md). Its default API does not need a GUI,
+server, database or global user configuration:
 
-**For Windows user, you must additionally install [webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section) and [vc_redist.x86](https://aka.ms/vs/17/release/vc_redist.x86.exe) or [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe).**
+```rust,no_run
+let dictionary = wikit_base::Dictionary::open("dictionary.wikit")?;
+let entries = dictionary.lookup("hello")?;
+# Ok::<(), wikit_base::WikitError>(())
+```
 
-# Developement
+## Release
 
-Install following tools
+Update the workspace version, internal dependency versions and all three NSH app
+versions together. Increase app build numbers for installable updates. Then run
+`mise run release:check`, commit the verified changes, push the branch, and run
+`mise run release:publish`. It creates an immutable SemVer alpha tag; GitHub Actions
+builds and publishes English release notes, native packages, terminal/server/CLI
+archives and SHA-256 checksums. It never overwrites existing tags.
 
-    cargo install tauri-cli trunk
+Library crates are prepared for external use but are not automatically uploaded
+to crates.io. Use a pinned Git tag or a local path until registry publication.
 
-    # rust for android target
-    rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-
-    # sdkmanager is from cmdline-tools https://developer.android.com/studio/command-line
-    sdkmanager "platforms;android-31" "platform-tools" "build-tools;31.0.0" "cmake;3.22.1" "ndk;25.1.8937393"
-
-Create a file named `.env` under directory `desktop/ui` with content
-
-    BROWSER=none
-    PORT=8080
-
-To develop wikit CLI
-
-    cd cli
-    cargo build
-
-To develop wikit desktop
-
-    cd desktop
-    cargo tauri dev
-
-To develop wikit mobile
-
-    cd android
-    make start
-
-# Building
-
-To build wikit CLI
-
-    cd cli
-    cargo build --release
-
-To build wikit desktop
-
-    cd desktop
-    cargo tauri build
-
-To build wikit mobile
-
-    cd android
-    make release
-
-# License
-
-[MIT](./LICENSE)
+[MIT License](LICENSE)

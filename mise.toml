@@ -1,0 +1,54 @@
+min_version = "2026.10.4"
+
+[tools]
+rust = "1.99.1"
+gh = "2.83.2"
+python = "3.13.9"
+java = "temurin-17.0.17+10"
+"cargo:https://github.com/longbridge/nsh" = { version = "rev:e40afd54cd0ca18707bc94ec836bd4eb4b977a75", crate = "nsh-cli", locked = true, install_env = { CARGO_PROFILE_RELEASE_LTO = "false", CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16" } }
+
+[tasks.check]
+description = "Check the entire Rust workspace"
+run = "cargo check --workspace --locked"
+
+[tasks.test]
+description = "Run workspace tests and native UI interactions"
+run = ["cargo test --workspace --locked", "nsh test client/desktop"]
+
+[tasks."check:native"]
+description = "Check the macOS, iOS and Android native entries"
+run = ["nsh check client/desktop", "nsh check client/ios", "nsh check client/android"]
+
+[tasks.fmt]
+description = "Format the Rust workspace"
+run = "cargo fmt --all"
+
+[tasks.cli]
+run = "cargo run -p wikit --"
+
+[tasks.server]
+run = "cargo run -p wikit-server --"
+
+[tasks.tui]
+run = "cargo run -p wikit-tui --"
+
+[tasks.desktop]
+run = "scripts/wikit.sh run desktop"
+
+[tasks."release:check"]
+description = "Validate SemVer alpha versions before release"
+run = "python scripts/release.py check"
+
+[tasks."release:publish"]
+description = "Publish the committed SemVer alpha tag to GitHub"
+run = "python scripts/release.py publish"
+
+[tasks."setup:android"]
+description = "Install Android SDK/NDK through mise and sdkmanager"
+run = "scripts/setup-android.sh"
+[tasks."setup:android".tools]
+android-sdk = "19.0"
+
+[tasks."build:android-runtime"]
+description = "Build the pinned NSH Android runtime with the compatibility patch"
+run = "python scripts/android-runtime.py"

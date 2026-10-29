@@ -1,0 +1,13 @@
+[package]
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Shared dictionary protocol types for Wikit"
+name = "wikit-proto"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_derive = "1.0"
+serde_json = "1.0"

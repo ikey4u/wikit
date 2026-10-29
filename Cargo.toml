@@ -1,3 +1,20 @@
 [workspace]
-members = ["cli", "core", "desktop/tauri", "desktop/ui", "proto"]
-exclude = ["client", "android/app/src/main/rust/native"]
+resolver = "3"
+members = ["crates/*", "tools/cli", "client/tui", "server"]
+default-members = ["crates/wikit-base", "crates/wikit-proto", "tools/cli", "client/tui", "server"]
+
+[workspace.package]
+version = "0.6.0-alpha.1"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/ikey4u/wikit"
+
+[workspace.dependencies]
+wikit-base = { path = "crates/wikit-base", version = "0.6.0-alpha.1", default-features = false }
+wikit-proto = { path = "crates/wikit-proto", version = "0.6.0-alpha.1" }
+nsh-core = { git = "https://github.com/longbridge/nsh", rev = "e40afd54cd0ca18707bc94ec836bd4eb4b977a75" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }

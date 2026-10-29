@@ -1,0 +1,16 @@
+[package]
+name = "wikit-tui"
+version.workspace = true
+edition.workspace = true
+publish = false
+[dependencies]
+wikit-base.workspace = true
+wikit-proto.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+ratatui = "0.29"
+crossterm = "0.28"
+html2text = "0.14"
+[dev-dependencies]
+tempfile = "3"

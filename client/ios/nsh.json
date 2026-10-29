@@ -2,7 +2,7 @@
   "name": "Wikit",
   "id": "com.zhqli.wikit",
   "appearance": "system",
-  "rust": "../native",
+  "rust": "../../crates/wikit-client",
   "capabilities": {
     "network": {
       "hosts": [
@@ -23,7 +23,7 @@
       ]
     }
   },
-  "icon": "../shared/icon.png",
-  "version": "0.6.0",
-  "build": 20261030
+  "icon": "../nsh/icon.png",
+  "version": "0.6.0-alpha.1",
+  "build": 20261031
 }
