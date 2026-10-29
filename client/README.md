@@ -63,7 +63,11 @@ SDK to verify native rendering, resource loading and device integration.
 A source-only `cargo install nsh-cli` does not install the Android Java runtime.
 Build the matching NSH checkout with `cargo xtask android --release --abi arm64-v8a`
 and set `NSH_RUNTIME` to that checkout's `target` directory before Android packaging.
-The test-release workflow performs this step automatically.
+The pinned NSH revision also needs `patches/nsh-android-tokens.patch` applied to
+its checkout before Android builds: the Android command encoder omitted the new
+`Tokens` variant. The patch sends this control-only update through the existing
+no-op branch; the core still resolves the app's styled token bindings.
+The test-release workflow applies the patch and builds the runtime automatically.
 The Native clients workflow runs the Rust tests, three entry checks and headless
 UI tests on Linux; platform package signing is not part of that workflow.
 

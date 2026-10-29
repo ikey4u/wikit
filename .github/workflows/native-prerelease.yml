@@ -67,6 +67,8 @@ jobs:
         run: |
           cargo metadata --format-version 1 --manifest-path client/native/Cargo.toml > "$RUNNER_TEMP/wikit-metadata.json"
           nsh_source=$(python3 -c 'import json,pathlib,sys; data=json.load(open(sys.argv[1])); pkg=next(p for p in data["packages"] if p["name"]=="nsh-core"); print(pathlib.Path(pkg["manifest_path"]).parents[2])' "$RUNNER_TEMP/wikit-metadata.json")
+          git -C "$nsh_source" apply --check "$GITHUB_WORKSPACE/client/patches/nsh-android-tokens.patch"
+          git -C "$nsh_source" apply "$GITHUB_WORKSPACE/client/patches/nsh-android-tokens.patch"
           cargo run --manifest-path "$nsh_source/Cargo.toml" -p xtask -- android --release --abi arm64-v8a
           test -f "$nsh_source/target/android/release/classes.dex"
           echo "NSH_RUNTIME=$nsh_source/target" >> "$GITHUB_ENV"

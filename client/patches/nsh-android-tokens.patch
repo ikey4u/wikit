@@ -1,0 +1,11 @@
+--- a/crates/nsh-platform-android/src/encode.rs
++++ b/crates/nsh-platform-android/src/encode.rs
+@@ -640,6 +640,8 @@
+                     }
+                     // Turned into a mount item / `ScrollTo` by the core.
+                     Command::LayoutAnimation(_)
++                    // Core resolves design-token bindings; this Java protocol has no token op.
++                    | Command::Tokens(_)
+                     | Command::SetStatusBar(_)
+                     | Command::ScrollToIndex { .. }
+                     | Command::Measure { .. }
