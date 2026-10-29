@@ -2,26 +2,39 @@ import { expect, open, test } from "nsh/test";
 
 test("native navigation works at phone width", async () => {
   const app = await open("./App.tsx", { width: 390, height: 844 });
-  await app.waitFor("你的随身词典");
+  await app.waitFor("A world of words awaits");
   expect(app.texts()).toContain("Wikit");
-  await app.press("label:词典");
-  await app.waitFor("词典与设置");
-  expect(app.shows("导入到设备")).toBe(true);
-  await app.press("label:笔记");
-  await app.waitFor("学习笔记");
-  await app.press("label:查词");
-  await app.press("label:查询");
-  await app.waitFor("请输入单词，并先添加、选择一本词典。");
+  await app.press("label:Library");
+  await app.waitFor("Dictionary library");
+  expect(app.shows("Import dictionary")).toBe(true);
+  await app.press("label:Notes");
+  await app.waitFor("Study notes");
+  await app.press("label:Search");
+  await app.press("label:Look up");
+  await app.waitFor("Enter a word and select a dictionary first.");
 });
 
 test("desktop sidebar opens favorites and preview", async () => {
   const app = await open("./App.tsx", { width: 1100, height: 760 });
-  await app.waitFor("你的随身词典");
-  await app.press("label:收藏");
-  await app.waitFor("收藏的单词");
-  await app.press("label:历史");
-  await app.waitFor("最近查询");
-  await app.press("label:预览");
-  await app.waitFor("词典页面预览");
-  expect(app.shows("刷新预览")).toBe(true);
+  await app.waitFor("A world of words awaits");
+  await app.press("label:Favorites");
+  await app.waitFor("Saved words");
+  await app.press("label:History");
+  await app.waitFor("Recently looked up");
+  await app.press("label:Preview");
+  await app.waitFor("Dictionary preview");
+  expect(app.shows("Refresh preview")).toBe(true);
+});
+
+
+test("desktop keyboard navigation works in dark mode with a Chinese system locale", async () => {
+  const app = await open("./App.tsx", { width: 1100, height: 760, platform: "macos", colorScheme: "dark", locale: "zh-CN" });
+  await app.waitFor("A world of words awaits");
+  await app.keyboard.press("mod+4");
+  await app.waitFor("Study notes");
+  expect(app.shows("Save notes")).toBe(true);
+  await app.keyboard.press("mod+5");
+  await app.waitFor("Dictionary library");
+  await app.keyboard.press("mod+1");
+  await app.waitFor("A world of words awaits");
 });
