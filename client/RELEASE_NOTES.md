@@ -24,7 +24,7 @@ Example: `wikit-server -d dictionary.wikit`, then `wikit-tui --server http://127
 - Development tools are installed with `mise install`. Use the root Cargo workspace and scripts directory. The old root Android/Tauri implementations and Rocket.toml have been removed.
 - Use `wikit-server` instead of `wikit server --start`. Existing native app identity and client data format are preserved.
 - Previous `-test` tags remain historical; new releases use `0.6.0-alpha.N`.
-- Android uses a test signing key. macOS is ad-hoc signed and not notarized; installation may require allowing it in Privacy & Security.
+- Android uses a CI-generated test signing key. Earlier test installations may need removal if Android reports a signature mismatch; uninstalling removes app-local data. macOS is ad-hoc signed and not notarized; installation may require allowing it in Privacy & Security.
 - iOS source checks are included, but an iOS installation package is not distributed.
 - Mobile system file picking remains unavailable. Standalone dictionary imports do not copy adjacent external media directories.
 - TUI converts HTML to terminal text; browser scripts, images and audio are not executed. Raw MDX reading does not automatically import MDD assets or companion styles.

@@ -71,3 +71,7 @@ provenance = "github-attestations"
 version = "1.99.1"
 backend = "core:rust"
 specifiers = ["1.99.1"]
+
+[tools.rust.options]
+components = "rustfmt"
+profile = "minimal"
